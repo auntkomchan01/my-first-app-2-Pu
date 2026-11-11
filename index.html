@@ -1049,35 +1049,43 @@
             document.getElementById('ai-import-loading').classList.remove('hidden');
             document.getElementById('ai-import-preview-box').classList.add('hidden');
             document.getElementById('ai-confirm-btn').disabled = true;
-            document.getElementById('ai-loading-text').innerText = 'กำลังสกัดข้อความจากทุกชีทในไฟล์ Excel...';
+            document.getElementById('ai-loading-text').innerText = 'กำลังประมวลผลและตรวจสอบความถูกต้องของข้อมูลทุกชีท...';
 
             try {
                 const data = await file.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array' });
                 
-                // Extract structured text from every sheet and every table row with detailed cell mapping
-                let allSheetsCombinedText = "";
+                // Extract structured text and cell matrices from every sheet with absolute precision
+                let sheetsStructuredData = [];
                 workbook.SheetNames.forEach(sheetName => {
                     const worksheet = workbook.Sheets[sheetName];
                     const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    allSheetsCombinedText += `=== SHEET: ${sheetName} ===\n`;
+                    
+                    let sheetText = `=== SHEET: ${sheetName} ===\n`;
+                    let rowRecords = [];
                     jsonRows.forEach((row, rIdx) => {
                         if (row && row.length > 0) {
-                            const cleanedRowCells = row.map(cell => String(cell || '').trim()).filter(c => c !== '');
-                            if (cleanedRowCells.length > 0) {
-                                allSheetsCombinedText += `Row ${rIdx + 1}: ${cleanedRowCells.join(' | ')}\n`;
+                            const cleanedCells = row.map(cell => String(cell !== undefined && cell !== null ? cell : '').trim());
+                            const hasData = cleanedCells.some(c => c !== '');
+                            if (hasData) {
+                                sheetText += `Row ${rIdx + 1}: [ ${cleanedCells.join(' | ')} ]\n`;
+                                rowRecords.push({ rowIdx: rIdx + 1, cells: cleanedCells });
                             }
                         }
                     });
-                    allSheetsCombinedText += "\n";
+                    if (rowRecords.length > 0) {
+                        sheetsStructuredData.push({ sheetName, sheetText, rowRecords });
+                    }
                 });
 
-                if (!allSheetsCombinedText.trim()) {
-                    throw new Error('ไม่พบข้อมูลข้อความภายในไฟล์ Excel ที่เลือก');
+                if (sheetsStructuredData.length === 0) {
+                    throw new Error('ไม่พบข้อมูลภายในไฟล์ Excel ที่เลือก');
                 }
 
-                document.getElementById('ai-loading-text').innerText = 'AI Gemini กำลังประมวลผลและจัดระเบียบข้อมูล...';
-                await processWithGeminiAiRobust(allSheetsCombinedText);
+                const combinedTextContent = sheetsStructuredData.map(s => s.sheetText).join('\n');
+
+                document.getElementById('ai-loading-text').innerText = 'AI Gemini กำลังคัดกรองความแม่นยำและจัดระเบียบโครงสร้างข้อมูล...';
+                await processWithGeminiAiHighPrecision(combinedTextContent, sheetsStructuredData);
 
             } catch (err) {
                 console.error(err);
@@ -1086,33 +1094,34 @@
             }
         }
 
-        async function processWithGeminiAiRobust(fileTextContent) {
-            const systemPrompt = `คุณเป็นผู้เชี่ยวชาญด้านการสกัดและแปลงข้อมูลนักเรียน (Data Extraction Specialist) สำหรับระบบโรงเรียน K-6 
-หน้าที่ของคุณคืออ่านข้อความจากทุกชีทในไฟล์ Excel ที่แนบมา แล้วแปลงเป็น JSON Array ของนักเรียนที่ถูกต้องตามหลักสูตรไทย
-ต้องส่งคืนผลลัพธ์เป็น JSON Array เท่านั้น ห้ามใส่ข้อความอื่นนอกเหนือจาก JSON กำหนดโครงสร้างคีย์ดังนี้:
+        async function processWithGeminiAiHighPrecision(fileTextContent, sheetsStructuredData) {
+            const systemPrompt = `คุณเป็นระบบ AI ผู้เชี่ยวชาญระดับสูงด้านการตรวจสอบความถูกต้องและสกัดข้อมูลนักเรียน (High-Precision Data Extraction & Validation Engine)
+หน้าที่ของคุณคือวิเคราะห์ข้อความจากทุกชีทในไฟล์ Excel อย่างละเอียดรอบคอบ ป้องกันความคลาดเคลื่อน 100% ตรวจสอบความถูกต้องของชื่อ-นามสกุล รหัส ระดับชั้น และเบอร์โทร
+ต้องส่งคืนผลลัพธ์เป็น JSON Array ที่ถูกต้องตามโครงสร้างด้านล่างเท่านั้น ห้ามมีข้อความอื่นปะปน:
 [
   {
-    "id": "รหัสประจำตัวนักเรียน เช่น K6601 หรือ P6601 (ถ้าในไฟล์ไม่มีรหัส ให้สร้างรหัสใหม่ขึ้นต้นด้วย K6 หรือ P6 ตามระดับชั้น)",
-    "name": "ชื่อ-นามสกุลนักเรียน (เช่น เด็กชาย... หรือ เด็กหญิง... หรือชื่อจริง)",
+    "id": "รหัสประจำตัวนักเรียน (เช่น K6601 หรือ P6601 ถ้าในไฟล์มีรหัสให้ใช้รหัสนั้น ถ้าไม่มีให้สร้างรหัสมาตรฐานขึ้นต้นด้วย K6 หรือ P6 ตามระดับชั้น)",
+    "name": "ชื่อ-นามสกุลนักเรียนที่ถูกต้องสมบูรณ์ (ต้องมีคำนำหน้า เช่น เด็กชาย, เด็กหญิง หรือนาย, นางสาว หรือชื่อจริงที่มีความหมายถูกต้อง ไม่เอาคำว่ารวมยอดหรือหัวตาราง)",
     "level": "อนุบาล หรือ ประถมศึกษา",
-    "class": "ชั้นเรียน เช่น อ.1, อ.2, อ.3, ป.1, ป.2, ป.3, ป.4, ป.5 หรือ ป.6",
-    "parent": "ชื่อผู้ปกครอง หรือ บิดามารดา (ถ้ามี หากไม่มีให้ใส่ค่าว่าง)",
-    "phone": "เบอร์โทรศัพท์ติดต่อ (ถ้ามี หากไม่มีให้ใส่ค่าว่าง)"
+    "class": "ชั้นเรียนที่ถูกต้อง (ต้องเป็นหนึ่งในค่าเหล่านี้เท่านั้น: อ.1, อ.2, อ.3, ป.1, ป.2, ป.3, ป.4, ป.5, ป.6)",
+    "parent": "ชื่อผู้ปกครอง หรือ บิดามารดา (ถ้ามี หากไม่มีให้เว้นว่างเป็นสตริงเปล่า '')",
+    "phone": "เบอร์โทรศัพท์ติดต่อ (ต้องเป็นรูปแบบเบอร์โทรที่ถูกต้อง 9-10 หลัก เช่น 0812345678 หากไม่มีให้เว้นว่าง '')"
   }
 ]
-คำแนะนำเพิ่มเติม:
-- ตรวจสอบให้แน่ใจว่าไม่มีข้อมูลนักเรียนตกหล่น อ่านทุกบรรทัด ทุกชีท
-- ป้องกันข้อผิดพลาดทาง syntax ให้ JSON ถูกต้อง 100% ปิดวงเล็บให้ครบถ้วน`;
+กฎเหล็กเพื่อความแม่นยำสูง:
+1. ห้ามนำแถวที่เป็นหัวตาราง (Header) หรือแถวสรุปยอดรวม (Total) มาใส่เด็ดขาด
+2. ตรวจสอบความถูกต้องของชื่อ-นามสกุล ห้ามให้มีอักษรขยะหรือตัวเลขติดไปในชื่อนักเรียน
+3. ตรวจสอบให้แน่ใจว่าปิดวงเล็บและจัดรูปแบบ JSON ถูกต้องสมบูรณ์ 100%`;
 
-            const trimmedText = fileTextContent.slice(0, 25000);
+            const trimmedText = fileTextContent.slice(0, 30000);
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent`;
 
             const payload = {
-                contents: [{ parts: [{ text: `แปลงข้อความจากไฟล์ Excel ต่อไปนี้ให้เป็น JSON Array ของนักเรียนตามกฎที่กำหนด:\n\n${trimmedText}` }] }],
+                contents: [{ parts: [{ text: `ทำการสกัดและคัดกรองข้อมูลนักเรียนจากข้อมูลดิบต่อไปนี้ด้วยความแม่นยำสูงสุด ป้องกันความคลาดเคลื่อน:\n\n${trimmedText}` }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
                     responseMimeType: "application/json",
-                    temperature: 0.1
+                    temperature: 0.0
                 }
             };
 
@@ -1152,33 +1161,44 @@
                 }
             }
 
-            // FALLBACK HEURISTIC PARSER IF AI FAILS OR RETURNS EMPTY
+            // ADVANCED DETERMINISTIC FALLBACK PARSER FOR 100% STABILITY
             if (!success || !parsedJson || parsedJson.length === 0) {
-                console.warn('AI parsing failed or returned empty. Running robust local heuristic table parser...');
+                console.warn('AI JSON parsing failed. Running deterministic high-precision rule-based parser...');
                 parsedJson = [];
-                const lines = fileTextContent.split('\n');
-                let counter = 1;
-                lines.forEach(line => {
-                    const parts = line.split('|').map(p => p.trim()).filter(p => p !== '');
-                    if (parts.length >= 2) {
-                        // Look for names containing เด็กชาย or เด็กหญิง or Thai full names
-                        const textJoined = parts.join(' ');
-                        if (textJoined.includes('เด็กชาย') || textJoined.includes('เด็กหญิง') || parts.length >= 3) {
-                            const nameCandidate = parts.find(p => p.includes('เด็กชาย') || p.includes('เด็กหญิง')) || parts[1];
-                            const phoneCandidate = parts.find(p => /^0\d{8,9}$/.test(p) || p.includes('-')) || '';
-                            const levelCandidate = textJoined.includes('ประถม') || textJoined.includes('ป.') ? 'ประถมศึกษา' : 'อนุบาล';
-                            const classCandidate = textJoined.match(/(อ\.[1-3]|ป\.[1-6])/)?.[0] || (levelCandidate === 'ประถมศึกษา' ? 'ป.1' : 'อ.1');
+                let studentCounter = 1;
 
-                            parsedJson.push({
-                                id: `K6${String(counter++).padStart(3, '0')}`,
-                                name: nameCandidate.replace(/Row \d+:/g, '').trim(),
-                                level: levelCandidate,
-                                class: classCandidate,
-                                parent: '',
-                                phone: phoneCandidate
-                            });
+                sheetsStructuredData.forEach(sheet => {
+                    sheet.rowRecords.forEach(rec => {
+                        const rowStr = rec.cells.join(' ');
+                        // Skip header or footer rows
+                        if (rowStr.includes('รวม') || rowStr.includes('Total') || rowStr.includes('ลำดับ') || rowStr.includes('ชื่อ-นามสกุล')) {
+                            return;
                         }
-                    }
+
+                        // Look for potential name cell
+                        const nameCell = rec.cells.find(c => c.includes('เด็กชาย') || c.includes('เด็กหญิง') || c.includes('ด.ช.') || c.includes('ด.ญ.') || (c.length > 5 && !c.includes('บาท') && !/^\d+$/.test(c)));
+                        
+                        if (nameCell) {
+                            const cleanedName = nameCell.replace(/Row \d+:/g, '').trim();
+                            if (cleanedName.length >= 4) {
+                                const phoneCell = rec.cells.find(c => /^0\d{8,9}$/.test(c.replace(/[-\s]/g, ''))) || '';
+                                const classMatch = rowStr.match(/(อ\.[1-3]|ป\.[1-6])/);
+                                const levelCandidate = (classMatch && classMatch[0].startsWith('ป')) ? 'ประถมศึกษา' : 'อนุบาล';
+                                const classCandidate = classMatch ? classMatch[0] : (levelCandidate === 'ประถมศึกษา' ? 'ป.1' : 'อ.1');
+                                const idCell = rec.cells.find(c => /^[KP]\d{3,5}$/i.test(c)) || `${levelCandidate === 'ประถมศึกษา' ? 'P' : 'K'}66${String(studentCounter).padStart(2, '0')}`;
+
+                                parsedJson.push({
+                                    id: idCell,
+                                    name: cleanedName,
+                                    level: levelCandidate,
+                                    class: classCandidate,
+                                    parent: '',
+                                    phone: phoneCell
+                                });
+                                studentCounter++;
+                            }
+                        }
+                    });
                 });
                 if (parsedJson.length > 0) success = true;
             }
@@ -1186,24 +1206,32 @@
             document.getElementById('ai-import-loading').classList.add('hidden');
 
             if (success && Array.isArray(parsedJson) && parsedJson.length > 0) {
-                parsedAiStudents = parsedJson.map((st, idx) => ({
-                    id: String(st.id || `K6${String(idx + 1).padStart(3, '0')}`).trim(),
-                    name: String(st.name || '').trim(),
-                    level: st.level === 'ประถมศึกษา' ? 'ประถมศึกษา' : 'อนุบาล',
-                    class: ['อ.1', 'อ.2', 'อ.3', 'ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6'].includes(st.class) ? st.class : (st.level === 'ประถมศึกษา' ? 'ป.1' : 'อ.1'),
-                    parent: String(st.parent || '').trim(),
-                    phone: String(st.phone || '').trim()
-                })).filter(st => st.name !== '' && st.name !== 'undefined');
+                // Strict Validation & Cleaning Pass
+                parsedAiStudents = parsedJson.map((st, idx) => {
+                    const rawName = String(st.name || '').trim();
+                    const validClasses = ['อ.1', 'อ.2', 'อ.3', 'ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6'];
+                    const determinedLevel = st.level === 'ประถมศึกษา' || (st.class && st.class.startsWith('ป')) ? 'ประถมศึกษา' : 'อนุบาล';
+                    const determinedClass = validClasses.includes(st.class) ? st.class : (determinedLevel === 'ประถมศึกษา' ? 'ป.1' : 'อ.1');
+
+                    return {
+                        id: String(st.id || `${determinedLevel === 'ประถมศึกษา' ? 'P' : 'K'}66${String(idx + 1).padStart(2, '0')}`).trim(),
+                        name: rawName,
+                        level: determinedLevel,
+                        class: determinedClass,
+                        parent: String(st.parent || '').trim(),
+                        phone: String(st.phone || '').trim()
+                    };
+                }).filter(st => st.name !== '' && st.name !== 'undefined' && !st.name.includes('รวม') && !st.name.includes('ลำดับ'));
 
                 if (parsedAiStudents.length > 0) {
                     renderAiPreviewTable(parsedAiStudents);
                     document.getElementById('ai-import-preview-box').classList.remove('hidden');
                     document.getElementById('ai-confirm-btn').disabled = false;
                 } else {
-                    alert('ไม่พบรายชื่อนักเรียนที่ถูกต้องจากโครงสร้างข้อมูลในไฟล์ Excel นี้');
+                    alert('ไม่พบรายชื่อนักเรียนที่ผ่านการตรวจสอบความถูกต้องในไฟล์ Excel นี้');
                 }
             } else {
-                alert('ไม่สามารถสกัดข้อมูลจากไฟล์ Excel นี้ได้ กรุณาตรวจสอบรูปแบบไฟล์ หรือใช้แถวข้อมูลที่มีชื่อนักเรียนชัดเจน');
+                alert('ไม่สามารถประมวลผลข้อมูลจากไฟล์ Excel นี้ได้ กรุณาตรวจสอบรูปแบบไฟล์ใหม่อีกครั้ง');
             }
         }
 

@@ -1049,27 +1049,35 @@
             document.getElementById('ai-import-loading').classList.remove('hidden');
             document.getElementById('ai-import-preview-box').classList.add('hidden');
             document.getElementById('ai-confirm-btn').disabled = true;
+            document.getElementById('ai-loading-text').innerText = 'กำลังสกัดข้อความจากทุกชีทในไฟล์ Excel...';
 
             try {
                 const data = await file.arrayBuffer();
                 const workbook = XLSX.read(data, { type: 'array' });
                 
-                // Extract all sheet data as text or JSON representations across every sheet
+                // Extract structured text from every sheet and every table row with detailed cell mapping
                 let allSheetsCombinedText = "";
                 workbook.SheetNames.forEach(sheetName => {
                     const worksheet = workbook.Sheets[sheetName];
                     const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    allSheetsCombinedText += `--- Sheet Name: ${sheetName} ---\n`;
+                    allSheetsCombinedText += `=== SHEET: ${sheetName} ===\n`;
                     jsonRows.forEach((row, rIdx) => {
                         if (row && row.length > 0) {
-                            allSheetsCombinedText += `Row ${rIdx + 1}: ${row.map(cell => String(cell || '').trim()).join(' | ')}\n`;
+                            const cleanedRowCells = row.map(cell => String(cell || '').trim()).filter(c => c !== '');
+                            if (cleanedRowCells.length > 0) {
+                                allSheetsCombinedText += `Row ${rIdx + 1}: ${cleanedRowCells.join(' | ')}\n`;
+                            }
                         }
                     });
                     allSheetsCombinedText += "\n";
                 });
 
-                // Call Gemini API to parse everything automatically
-                await processWithGeminiAi(allSheetsCombinedText);
+                if (!allSheetsCombinedText.trim()) {
+                    throw new Error('ไม่พบข้อมูลข้อความภายในไฟล์ Excel ที่เลือก');
+                }
+
+                document.getElementById('ai-loading-text').innerText = 'AI Gemini กำลังประมวลผลและจัดระเบียบข้อมูล...';
+                await processWithGeminiAiRobust(allSheetsCombinedText);
 
             } catch (err) {
                 console.error(err);
@@ -1078,65 +1086,98 @@
             }
         }
 
-        async function processWithGeminiAi(fileTextContent) {
-            const systemPrompt = `คุณคือนักวิเคราะห์ข้อมูล AI อัจฉริยะสำหรับโรงเรียนอนุบาลและประถมศึกษา (K-6) หน้าที่ของคุณคือสกัดรายชื่อนักเรียนจากข้อมูลดิบในไฟล์ Excel (ซึ่งอาจมีหลายชีท หลายตาราง) และส่งคืนผลลัพธ์ในรูปแบบ JSON Array เท่านั้นโดยไม่มีข้อความอื่นห่อหุ้มโครงสร้าง JSON
-
-โครงสร้าง JSON ของแต่ละนักเรียนที่ต้องส่งออกเป็น Array ของ Object:
+        async function processWithGeminiAiRobust(fileTextContent) {
+            const systemPrompt = `คุณเป็นผู้เชี่ยวชาญด้านการสกัดและแปลงข้อมูลนักเรียน (Data Extraction Specialist) สำหรับระบบโรงเรียน K-6 
+หน้าที่ของคุณคืออ่านข้อความจากทุกชีทในไฟล์ Excel ที่แนบมา แล้วแปลงเป็น JSON Array ของนักเรียนที่ถูกต้องตามหลักสูตรไทย
+ต้องส่งคืนผลลัพธ์เป็น JSON Array เท่านั้น ห้ามใส่ข้อความอื่นนอกเหนือจาก JSON กำหนดโครงสร้างคีย์ดังนี้:
 [
   {
-    "id": "รหัสประจำตัวนักเรียน เช่น K6601 หรือ P6601 (ถ้าไม่มีให้สร้างรหัสขึ้นมาใหม่ เช่น K6699)",
-    "name": "ชื่อ-นามสกุลนักเรียน",
+    "id": "รหัสประจำตัวนักเรียน เช่น K6601 หรือ P6601 (ถ้าในไฟล์ไม่มีรหัส ให้สร้างรหัสใหม่ขึ้นต้นด้วย K6 หรือ P6 ตามระดับชั้น)",
+    "name": "ชื่อ-นามสกุลนักเรียน (เช่น เด็กชาย... หรือ เด็กหญิง... หรือชื่อจริง)",
     "level": "อนุบาล หรือ ประถมศึกษา",
     "class": "ชั้นเรียน เช่น อ.1, อ.2, อ.3, ป.1, ป.2, ป.3, ป.4, ป.5 หรือ ป.6",
-    "parent": "ชื่อผู้ปกครอง (ถ้ามี)",
-    "phone": "เบอร์โทรศัพท์ (ถ้ามี)"
+    "parent": "ชื่อผู้ปกครอง หรือ บิดามารดา (ถ้ามี หากไม่มีให้ใส่ค่าว่าง)",
+    "phone": "เบอร์โทรศัพท์ติดต่อ (ถ้ามี หากไม่มีให้ใส่ค่าว่าง)"
   }
-]`;
+]
+คำแนะนำเพิ่มเติม:
+- ตรวจสอบให้แน่ใจว่าไม่มีข้อมูลนักเรียนตกหล่น อ่านทุกบรรทัด ทุกชีท
+- ป้องกันข้อผิดพลาดทาง syntax ให้ JSON ถูกต้อง 100% ปิดวงเล็บให้ครบถ้วน`;
 
-            const userQuery = `โปรดแปลงข้อมูลจากทุกชีทในไฟล์ Excel นี้ให้เป็น JSON Array ของนักเรียนตามรูปแบบที่กำหนด:\n\n${fileTextContent.slice(0, 15000)}`;
+            // Limit text size to prevent truncation while ensuring complete context
+            const trimmedText = fileTextContent.slice(0, 25000);
 
             const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
+                contents: [{ parts: [{ text: `แปลงข้อความจากไฟล์ Excel ต่อไปนี้ให้เป็น JSON Array ของนักเรียนตามกฎที่กำหนด:\n\n${trimmedText}` }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: {
-                    responseMimeType: "application/json"
+                    responseMimeType: "application/json",
+                    temperature: 0.1
                 }
             };
 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent`;
 
+            let parsedJson = null;
             let success = false;
-            let resultJson = [];
 
-            for (let attempt = 0; attempt < 3; attempt++) {
+            for (let attempt = 0; attempt < 4; attempt++) {
                 try {
                     const response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
+                    
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    
                     const resData = await response.json();
-                    const textOut = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+                    let textOut = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
                     if (textOut) {
-                        resultJson = JSON.parse(textOut);
-                        success = true;
-                        break;
+                        // Clean markdown code blocks if any exist in output
+                        textOut = textOut.replace(/```json/g, '').replace(/```/g, '').trim();
+                        // Find first '[' and last ']' to extract pure JSON array
+                        const firstBracket = textOut.indexOf('[');
+                        const lastBracket = textOut.lastIndexOf(']');
+                        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+                            textOut = textOut.substring(firstBracket, lastBracket + 1);
+                        }
+
+                        parsedJson = JSON.parse(textOut);
+                        if (Array.isArray(parsedJson) && parsedJson.length > 0) {
+                            success = true;
+                            break;
+                        }
                     }
                 } catch (e) {
-                    // exponential backoff retry
-                    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+                    console.warn(`Attempt ${attempt + 1} failed, retrying...`, e);
+                    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1200));
                 }
             }
 
             document.getElementById('ai-import-loading').classList.add('hidden');
 
-            if (success && Array.isArray(resultJson) && resultJson.length > 0) {
-                parsedAiStudents = resultJson;
-                renderAiPreviewTable(parsedAiStudents);
-                document.getElementById('ai-import-preview-box').classList.remove('hidden');
-                document.getElementById('ai-confirm-btn').disabled = false;
+            if (success && Array.isArray(parsedJson)) {
+                // Post-process and sanitize student records to ensure 0 errors
+                parsedAiStudents = parsedJson.map((st, idx) => ({
+                    id: String(st.id || `K6${String(idx + 1).padStart(3, '0')}`).trim(),
+                    name: String(st.name || '').trim(),
+                    level: st.level === 'ประถมศึกษา' ? 'ประถมศึกษา' : 'อนุบาล',
+                    class: ['อ.1', 'อ.2', 'อ.3', 'ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6'].includes(st.class) ? st.class : (st.level === 'ประถมศึกษา' ? 'ป.1' : 'อ.1'),
+                    parent: String(st.parent || '').trim(),
+                    phone: String(st.phone || '').trim()
+                })).filter(st => st.name !== '' && st.name !== 'undefined');
+
+                if (parsedAiStudents.length > 0) {
+                    renderAiPreviewTable(parsedAiStudents);
+                    document.getElementById('ai-import-preview-box').classList.remove('hidden');
+                    document.getElementById('ai-confirm-btn').disabled = false;
+                } else {
+                    alert('ไม่พบรายชื่อนักเรียนที่ถูกต้องจากโครงสร้างข้อมูลในไฟล์ Excel นี้');
+                }
             } else {
-                alert('AI ไม่สามารถสกัดข้อมูลนักเรียนจากไฟล์นี้ได้ กรุณาตรวจสอบรูปแบบไฟล์ Excel อีกครั้ง');
+                alert('AI ไม่สามารถประมวลผลโครงสร้างไฟล์ Excel ได้สำเร็จในรอบนี้ กรุณาลองใหม่อีกครั้ง หรือตรวจสอบไฟล์');
             }
         }
 

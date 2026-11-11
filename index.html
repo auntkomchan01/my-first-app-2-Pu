@@ -3,893 +3,1011 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบรับชำระเงินนักเรียนอนุบาลและประถม</title>
-    <!-- Tailwind CSS -->
+    <title>ระบบรับชำระเงินระดับอนุบาลและประถมศึกษา (K-6 Payment System)</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Font: Prompt -->
+    <!-- Google Fonts (Prompt) -->
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- SheetJS for Excel parsing -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- Canvas Confetti for success celebration -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <style>
-        body {
-            font-family: 'Prompt', sans-serif;
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        kidBlue: '#0284c7',
+                        kidOrange: '#f97316',
+                        kidYellow: '#eab308',
+                        kidGreen: '#10b981',
+                        kidBg: '#f0f9ff'
+                    },
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    }
+                }
+            }
         }
+    </script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
         @media print {
-            .no-print {
-                display: none !important;
-            }
-            body {
-                background: white !important;
-            }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white; padding: 0; margin: 0; }
+            #receipt-modal { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: white; }
+            .modal-content { shadow: none; border: none; max-width: 100% !important; width: 100% !important; }
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+<body class="bg-sky-50/50 min-h-screen text-slate-800 pb-12">
 
-    <!-- Navbar -->
-    <header class="bg-indigo-700 text-white shadow-lg sticky top-0 z-40 no-print">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl font-bold">
-                    <i class="fa-solid fa-school"></i>
+    <!-- Top Navigation Header -->
+    <header class="bg-gradient-to-r from-sky-600 via-indigo-600 to-amber-500 text-white shadow-md no-print">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/20 p-2.5 rounded-2xl backdrop-blur-sm">
+                    <i class="fa-solid fa-child-reaching text-3xl text-yellow-300"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold">ระบบรับชำระเงินนักเรียน</h1>
-                    <p class="text-xs text-indigo-200">ระดับอนุบาลและประถมศึกษา (พร้อมระบบนำเข้า AI & ส่งออกข้อมูลครบถ้วน)</p>
+                    <h1 class="text-xl font-bold leading-tight">ระบบรับชำระเงินค่าธรรมเนียมการศึกษา (K-6)</h1>
+                    <p class="text-xs text-sky-100">รองรับ 3 ปีการศึกษา | ตรวจสอบสลิป & รายงานเปรียบเทียบ</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
-                <button onclick="switchTab('tab-dashboard')" class="nav-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-800 text-white transition hover:bg-indigo-600 flex items-center gap-1.5">
-                    <i class="fa-solid fa-chart-pie"></i> ภาพรวม
+
+            <!-- Navigation Tabs -->
+            <div class="flex items-center bg-black/10 p-1 rounded-xl text-sm font-medium flex-wrap justify-center gap-1">
+                <button onclick="switchTab('tab-payment')" id="btn-tab-payment" class="px-3 py-1.5 rounded-lg transition bg-white text-sky-700 shadow-sm flex items-center gap-1.5 text-xs">
+                    <i class="fa-solid fa-cash-register"></i> รับชำระเงิน
                 </button>
-                <button onclick="switchTab('tab-payment')" class="nav-btn px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-100 hover:bg-indigo-600 transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-cash-register"></i> บันทึกชำระเงิน
+                <button onclick="switchTab('tab-students')" id="btn-tab-students" class="px-3 py-1.5 rounded-lg transition text-white hover:bg-white/10 flex items-center gap-1.5 text-xs">
+                    <i class="fa-solid fa-user-graduate"></i> นักเรียน
                 </button>
-                <button onclick="switchTab('tab-students')" class="nav-btn px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-100 hover:bg-indigo-600 transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-users"></i> จัดการนักเรียน
+                <button onclick="switchTab('tab-history')" id="btn-tab-history" class="px-3 py-1.5 rounded-lg transition text-white hover:bg-white/10 flex items-center gap-1.5 text-xs">
+                    <i class="fa-solid fa-receipt"></i> ประวัติ & สลิป
                 </button>
-                <button onclick="switchTab('tab-history')" class="nav-btn px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-100 hover:bg-indigo-600 transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายการ
-                </button>
-                <button onclick="switchTab('tab-export')" class="nav-btn px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-100 hover:bg-indigo-600 transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-file-arrow-down"></i> ส่งออกข้อมูล
+                <button onclick="switchTab('tab-reports')" id="btn-tab-reports" class="px-3 py-1.5 rounded-lg transition text-white hover:bg-white/10 flex items-center gap-1.5 text-xs">
+                    <i class="fa-solid fa-chart-line"></i> รายงาน & เปรียบเทียบ 3 ปี
                 </button>
             </div>
         </div>
     </header>
 
     <!-- Main Container -->
-    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full space-y-6">
+    <div class="max-w-7xl mx-auto px-4 pt-6 space-y-6">
 
-        <!-- TAB 1: DASHBOARD -->
-        <section id="tab-dashboard" class="tab-content space-y-6">
-            <!-- Stats Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold">
-                        <i class="fa-solid fa-wallet"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-slate-500 font-medium">ยอดรับชำระรวมทั้งหมด</p>
-                        <h3 id="stat-total-revenue" class="text-xl font-bold text-slate-800">0.00 ฿</h3>
-                    </div>
+        <!-- DASHBOARD STATS SUMMARY -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
+            <!-- Total Today -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-sky-100 flex items-center space-x-4">
+                <div class="p-3 bg-sky-100 text-sky-600 rounded-xl text-xl">
+                    <i class="fa-solid fa-wallet"></i>
                 </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">
-                        <i class="fa-solid fa-user-check"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-slate-500 font-medium">นักเรียนที่ชำระแล้ว</p>
-                        <h3 id="stat-paid-count" class="text-xl font-bold text-slate-800">0 คน</h3>
-                    </div>
-                </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">
-                        <i class="fa-solid fa-user-clock"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-slate-500 font-medium">ยังไม่ชำระเงิน</p>
-                        <h3 id="stat-pending-count" class="text-xl font-bold text-slate-800">0 คน</h3>
-                    </div>
-                </div>
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold">
-                        <i class="fa-solid fa-users-rectangle"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-slate-500 font-medium">นักเรียนทั้งหมด</p>
-                        <h3 id="stat-total-students" class="text-xl font-bold text-slate-800">0 คน</h3>
-                    </div>
+                <div>
+                    <span class="text-xs font-semibold text-slate-400">รายรับรวมประจำปี <span id="stat-year-label">2569</span></span>
+                    <h3 class="text-xl font-bold text-sky-700" id="stat-total-year">฿0</h3>
                 </div>
             </div>
-
-            <!-- Charts / Summary breakdown -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                            <i class="fa-solid fa-chart-column text-indigo-600"></i> สรุปยอดแยกตามระดับชั้น
-                        </h2>
-                    </div>
-                    <div id="class-summary-container" class="space-y-3">
-                        <!-- Populated by JS -->
-                    </div>
+            <!-- Kinder Revenue Today -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-amber-100 flex items-center space-x-4">
+                <div class="p-3 bg-amber-100 text-amber-600 rounded-xl text-xl">
+                    <i class="fa-solid fa-shapes"></i>
                 </div>
-
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-                    <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-bolt text-amber-500"></i> ทางลัดด่วน
-                    </h2>
-                    <div class="space-y-2">
-                        <button onclick="switchTab('tab-payment')" class="w-full text-left p-3 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 transition flex items-center justify-between text-xs font-semibold">
-                            <span class="flex items-center gap-2"><i class="fa-solid fa-cash-register text-indigo-600"></i> บันทึกรายการชำระเงินใหม่</span>
-                            <i class="fa-solid fa-chevron-right text-slate-400"></i>
-                        </button>
-                        <button onclick="openExcelImportModal()" class="w-full text-left p-3 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 transition flex items-center justify-between text-xs font-semibold">
-                            <span class="flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i> นำเข้านักเรียนด้วย Excel + AI</span>
-                            <i class="fa-solid fa-chevron-right text-slate-400"></i>
-                        </button>
-                        <button onclick="switchTab('tab-export')" class="w-full text-left p-3 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 transition flex items-center justify-between text-xs font-semibold">
-                            <span class="flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-600"></i> ส่งออกรายงาน Excel / CSV / PDF</span>
-                            <i class="fa-solid fa-chevron-right text-slate-400"></i>
-                        </button>
-                    </div>
+                <div>
+                    <span class="text-xs font-semibold text-slate-400">แผนกอนุบาล (อ.1 - อ.3)</span>
+                    <h3 class="text-xl font-bold text-amber-600" id="stat-kinder-year">฿0</h3>
                 </div>
             </div>
-        </section>
+            <!-- Primary Revenue Today -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 flex items-center space-x-4">
+                <div class="p-3 bg-emerald-100 text-emerald-600 rounded-xl text-xl">
+                    <i class="fa-solid fa-book-open-reader"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-semibold text-slate-400">แผนกประถม (ป.1 - ป.6)</span>
+                    <h3 class="text-xl font-bold text-emerald-600" id="stat-primary-year">฿0</h3>
+                </div>
+            </div>
+            <!-- Total Count Today -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-purple-100 flex items-center space-x-4">
+                <div class="p-3 bg-purple-100 text-purple-600 rounded-xl text-xl">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-semibold text-slate-400">รายการรับชำระทั้งหมด</span>
+                    <h3 class="text-xl font-bold text-purple-600" id="stat-count-year">0 รายการ</h3>
+                </div>
+            </div>
+        </div>
 
-        <!-- TAB 2: PAYMENT & RECEIPT -->
-        <section id="tab-payment" class="tab-content hidden space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <!-- Left: Form -->
-                <div class="lg:col-span-7 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-5">
-                    <h2 class="text-base font-bold text-slate-800 flex items-center gap-2 border-b pb-3">
-                        <i class="fa-solid fa-cash-register text-indigo-600"></i> แบบฟอร์มรับชำระเงินค่าเทอม / กิจกรรม
+        <!-- TAB 1: PAYMENT FORM & SELECTION -->
+        <div id="tab-payment" class="tab-content grid grid-cols-1 lg:grid-cols-12 gap-6 no-print">
+            
+            <!-- Left Panel: Student Selection & Info (4 cols) -->
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-sky-100 space-y-4">
+                    <h2 class="text-base font-bold text-slate-700 flex items-center gap-2 border-b pb-3">
+                        <i class="fa-solid fa-user-check text-sky-600"></i> ตัวเลือกการชำระเงิน
                     </h2>
 
-                    <!-- Search Student -->
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-700">ค้นหานักเรียน (ชื่อ, นามสกุล หรือ รหัสนักเรียน)</label>
-                        <div class="relative">
-                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </span>
-                            <input type="text" id="payment-search" oninput="filterPaymentStudents(this.value)" placeholder="พิมพ์ชื่อเพื่อค้นหา..." class="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        </div>
-                        <div id="payment-student-dropdown" class="max-h-40 overflow-y-auto border border-slate-200 rounded-xl mt-1 hidden bg-white shadow-lg z-30 absolute w-full"></div>
-                    </div>
-
-                    <!-- Selected Student Details Card -->
-                    <div id="selected-student-card" class="hidden bg-indigo-50/60 p-4 rounded-xl border border-indigo-100 flex items-center justify-between">
-                        <div>
-                            <span id="card-student-code" class="text-[10px] font-bold px-2 py-0.5 bg-indigo-200 text-indigo-800 rounded-md">ID: -</span>
-                            <h4 id="card-student-name" class="text-sm font-bold text-slate-800 mt-1">-</h4>
-                            <p id="card-student-class" class="text-xs text-slate-600">-</p>
-                        </div>
-                        <button onclick="clearSelectedStudent()" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-2.5 py-1 bg-white rounded-lg border border-rose-200 shadow-xs">เปลี่ยนนักเรียน</button>
-                    </div>
-
-                    <!-- Fee Items Selection -->
-                    <div class="space-y-2">
-                        <label class="block text-xs font-bold text-slate-700">รายการค่าใช้จ่ายที่ต้องชำระ</label>
-                        <div id="fee-items-container" class="space-y-2 max-h-56 overflow-y-auto pr-1">
-                            <!-- Populated by JS -->
-                        </div>
-                    </div>
-
-                    <!-- Custom Amount / Discount -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="block text-xs font-bold text-slate-700">ส่วนลด (บาท)</label>
-                            <input type="number" id="payment-discount" value="0" min="0" oninput="calculateTotalPayment()" class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        </div>
-                        <div class="space-y-1">
-                            <label class="block text-xs font-bold text-slate-700">วิธีชำระเงิน</label>
-                            <select id="payment-method" class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                                <option value="เงินสด">เงินสด</option>
-                                <option value="โอนเงินผ่านธนาคาร">โอนเงินผ่านธนาคาร (QR Code)</option>
-                                <option value="สแกนจ่าย">สแกนจ่าย QR PromptPay</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Slip Upload for Transfer -->
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-700">แนบหลักฐานการโอนเงิน (ถ้ามี)</label>
-                        <input type="file" id="slip-file-input" accept="image/*" onchange="handleSlipUpload(event)" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                        <div id="slip-preview-container" class="hidden mt-2 relative w-24 h-24 border rounded-xl overflow-hidden shadow-xs">
-                            <img id="slip-preview-img" src="" class="w-full h-full object-cover">
-                            <button onclick="removeSlip()" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                    </div>
-
-                    <!-- Total & Submit -->
-                    <div class="pt-4 border-t flex items-center justify-between">
-                        <div>
-                            <span class="text-xs text-slate-500">ยอดชำระสุทธิ:</span>
-                            <h3 id="payment-grand-total" class="text-2xl font-bold text-indigo-600">0.00 ฿</h3>
-                        </div>
-                        <button onclick="submitPayment()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-2">
-                            <i class="fa-solid fa-check"></i> ยืนยันการรับชำระเงิน
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Right: Quick Receipt Preview -->
-                <div class="lg:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between space-y-4">
+                    <!-- Year Selector -->
                     <div>
-                        <div class="flex justify-between items-center border-b pb-3 mb-4">
-                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-receipt text-indigo-600"></i> ใบเสร็จรับเงินอย่างย่อ
-                            </h3>
-                            <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-semibold">ตัวอย่าง</span>
-                        </div>
-                        <div id="receipt-preview-box" class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-3 font-mono">
-                            <div class="text-center space-y-1">
-                                <h4 class="font-bold text-sm text-slate-800">โรงเรียนอนุบาลและประถม</h4>
-                                <p class="text-[10px] text-slate-500">ใบเสร็จรับเงิน / ใบสำคัญรับเงิน</p>
-                                <p id="preview-receipt-no" class="text-[10px] text-indigo-600">เลขที่: REC-2026-0000</p>
-                            </div>
-                            <div class="border-t border-dashed border-slate-300 pt-2 space-y-1">
-                                <p><strong>ชื่อ-นามสกุล:</strong> <span id="preview-student-name">-</span></p>
-                                <p><strong>ระดับชั้น:</strong> <span id="preview-student-class">-</span></p>
-                                <p><strong>วันที่:</strong> <span id="preview-date">-</span></p>
-                            </div>
-                            <div class="border-t border-dashed border-slate-300 pt-2">
-                                <table class="w-full text-left">
-                                    <thead>
-                                        <tr class="text-slate-500">
-                                            <th>รายการ</th>
-                                            <th class="text-right">จำนวนเงิน</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="preview-items-list">
-                                        <tr><td colspan="2" class="text-center text-slate-400 py-2">ยังไม่ได้เลือกรายการ</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="border-t border-dashed border-slate-300 pt-2 space-y-1 font-bold">
-                                <div class="flex justify-between"><span>ส่วนลด:</span> <span id="preview-discount">0.00 ฿</span></div>
-                                <div class="flex justify-between text-indigo-600 text-sm"><span>รวมสุทธิ:</span> <span id="preview-total">0.00 ฿</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <button onclick="printLastReceipt()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-print"></i> พิมพ์ใบเสร็จล่าสุด
-                    </button>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB 3: STUDENT MANAGEMENT -->
-        <section id="tab-students" class="tab-content hidden space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-                <div class="flex flex-wrap justify-between items-center gap-4 border-b pb-4">
-                    <div>
-                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                            <i class="fa-solid fa-users text-indigo-600"></i> จัดการข้อมูลนักเรียน (อนุบาล - ประถม)
-                        </h2>
-                        <p class="text-xs text-slate-500">เพิ่ม ลบ แก้ไข หรือนำเข้าข้อมูลนักเรียนผ่านไฟล์ Excel และ Google Gemini AI</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="openExcelImportModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> นำเข้าผ่าน Excel / AI
-                        </button>
-                        <button onclick="openStudentModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-user-plus"></i> เพิ่มนักเรียน
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Filters & Search -->
-                <div class="flex flex-wrap gap-3 items-center justify-between">
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <input type="text" id="student-search" oninput="renderStudentTable()" placeholder="ค้นหารายชื่อนักเรียน..." class="p-2 text-xs border border-slate-200 rounded-xl w-full sm:w-64 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        <select id="student-filter-class" onchange="renderStudentTable()" class="p-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                            <option value="">ทุกระดับชั้น</option>
-                            <option value="อนุบาล 1">อนุบาล 1</option>
-                            <option value="อนุบาล 2">อนุบาล 2</option>
-                            <option value="อนุบาล 3">อนุบาล 3</option>
-                            <option value="ประถมศึกษาปีที่ 1">ประถมศึกษาปีที่ 1</option>
-                            <option value="ประถมศึกษาปีที่ 2">ประถมศึกษาปีที่ 2</option>
-                            <option value="ประถมศึกษาปีที่ 3">ประถมศึกษาปีที่ 3</option>
-                            <option value="ประถมศึกษาปีที่ 4">ประถมศึกษาปีที่ 4</option>
-                            <option value="ประถมศึกษาปีที่ 5">ประถมศึกษาปีที่ 5</option>
-                            <option value="ประถมศึกษาปีที่ 6">ประถมศึกษาปีที่ 6</option>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ปีการศึกษา *</label>
+                        <select id="pay-academic-year" onchange="updateDashboardStats()" class="w-full p-2.5 text-sm font-bold text-sky-700 border border-sky-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none bg-sky-50/50">
+                            <option value="2569" selected>ปีการศึกษา 2569</option>
+                            <option value="2568">ปีการศึกษา 2568</option>
+                            <option value="2567">ปีการศึกษา 2567</option>
                         </select>
                     </div>
-                    <div class="text-xs text-slate-500 font-medium">
-                        แสดงผลทั้งหมด <span id="student-count-badge" class="font-bold text-indigo-600">0</span> คน
+
+                    <!-- Fast Search Student -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ค้นหานักเรียน (รหัส / ชื่อ)</label>
+                        <div class="relative">
+                            <input type="text" id="pay-search-student" onkeyup="searchStudentDropdown()" placeholder="พิมพ์รหัส เช่น K6601 หรือ ชื่อ..."
+                                class="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                        </div>
+                    </div>
+
+                    <!-- Student Select Dropdown -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">เลือกรายการนักเรียน *</label>
+                        <select id="pay-student-select" onchange="onSelectStudent()" class="w-full p-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none bg-slate-50">
+                            <option value="">-- กรุณาเลือกนักเรียน --</option>
+                        </select>
+                    </div>
+
+                    <!-- Selected Student Display Card -->
+                    <div id="selected-student-card" class="bg-sky-50/70 p-4 rounded-xl border border-sky-200 hidden space-y-2 text-xs">
+                        <div class="flex justify-between items-start">
+                            <span class="font-mono text-sky-700 font-bold bg-sky-100 px-2 py-0.5 rounded" id="disp-std-id">-</span>
+                            <span class="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded" id="disp-std-level">-</span>
+                        </div>
+                        <p class="text-sm font-bold text-slate-800" id="disp-std-name">-</p>
+                        <div class="text-slate-600 space-y-0.5">
+                            <p><i class="fa-solid fa-school text-slate-400 mr-1"></i> ชั้นเรียน: <span id="disp-std-class" class="font-medium">-</span></p>
+                            <p><i class="fa-solid fa-user-shield text-slate-400 mr-1"></i> ผู้ปกครอง: <span id="disp-std-parent" class="font-medium">-</span></p>
+                            <p><i class="fa-solid fa-phone text-slate-400 mr-1"></i> เบอร์โทร: <span id="disp-std-phone" class="font-medium">-</span></p>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Students Table -->
-                <div class="overflow-x-auto border border-slate-100 rounded-xl">
+            <!-- Right Panel: Multi-Item Fee Selection & Slip Upload (8 cols) -->
+            <div class="lg:col-span-8">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-sky-100 space-y-6">
+                    <h2 class="text-base font-bold text-slate-700 flex items-center justify-between border-b pb-3">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-list-check text-sky-600"></i> รายการค่าธรรมเนียม (ใส่จำนวนเงินได้เอง)</span>
+                        <span class="text-xs font-normal text-slate-400">8 รายการหลัก + รายการเพิ่มเติม</span>
+                    </h2>
+
+                    <!-- Fee Item List Checkboxes -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="fee-items-container">
+                        <!-- Items rendered dynamically via JS -->
+                    </div>
+
+                    <!-- Custom Item Add Option -->
+                    <div class="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-300 flex flex-wrap sm:flex-nowrap gap-3 items-center">
+                        <input type="text" id="custom-item-name" placeholder="8. อื่นๆ: ระบุชื่อรายการ" class="w-full sm:w-1/2 p-2 text-xs border border-slate-300 rounded-lg">
+                        <input type="number" id="custom-item-price" placeholder="จำนวนเงิน (บาท)" class="w-full sm:w-1/3 p-2 text-xs border border-slate-300 rounded-lg">
+                        <button onclick="addCustomFeeItem()" class="w-full sm:w-auto px-4 py-2 bg-slate-700 text-white rounded-lg text-xs hover:bg-slate-800 transition whitespace-nowrap">
+                            <i class="fa-solid fa-plus mr-1"></i> เพิ่มรายการ
+                        </button>
+                    </div>
+
+                    <!-- Total Computation -->
+                    <div class="bg-slate-50 p-4 rounded-xl space-y-3 border border-slate-200">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-600">รวมยอดเงินทั้งสิ้น:</span>
+                            <span class="font-bold text-slate-700 text-base" id="subtotal-amount">฿0</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-600 flex items-center gap-1">ส่วนลดพิเศษ (Discount):</span>
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="discount-input" value="0" min="0" oninput="calculateTotal()" class="w-24 p-1 text-right text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-sky-500">
+                                <span class="text-xs text-slate-500">บาท</span>
+                            </div>
+                        </div>
+                        <div class="border-t pt-2 flex justify-between items-center text-lg font-bold">
+                            <span class="text-slate-800">ยอดชำระสุทธิ (Net Total):</span>
+                            <span class="text-2xl text-emerald-600" id="grand-total-amount">฿0</span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method & Slip Attachment -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start border-t pt-4">
+                        <div class="space-y-3">
+                            <label class="block text-xs font-semibold text-slate-600">ช่องทางการชำระเงิน *</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-sky-50 border-sky-500 bg-sky-50/50 text-xs text-center" onclick="toggleSlipBox(false)">
+                                    <input type="radio" name="pay-method" value="เงินสด" checked class="mb-1 text-sky-600">
+                                    <i class="fa-solid fa-money-bill-wave text-emerald-600 text-base mb-0.5"></i> เงินสด
+                                </label>
+                                <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-sky-50 border-slate-200 text-xs text-center" onclick="toggleSlipBox(true)">
+                                    <input type="radio" name="pay-method" value="สแกน QR Code" class="mb-1 text-sky-600">
+                                    <i class="fa-solid fa-qrcode text-indigo-600 text-base mb-0.5"></i> QR Code
+                                </label>
+                                <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-sky-50 border-slate-200 text-xs text-center" onclick="toggleSlipBox(true)">
+                                    <input type="radio" name="pay-method" value="โอนเงินธนาคาร" class="mb-1 text-sky-600">
+                                    <i class="fa-solid fa-building-columns text-amber-600 text-base mb-0.5"></i> โอนเงิน
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Slip Upload & Verify Area -->
+                        <div id="slip-upload-section" class="hidden space-y-2 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                            <label class="block text-xs font-semibold text-slate-700">แนบสลิปการโอนเงิน (เพื่อตรวจสอบยอด)</label>
+                            <input type="file" id="slip-file-input" accept="image/*" onchange="previewSlipImage(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-600">ระบุยอดเงินในสลิป:</span>
+                                <input type="number" id="slip-amount-input" placeholder="0.00" oninput="checkSlipMatch()" class="w-28 p-1 text-xs border border-slate-300 rounded-lg text-right font-bold text-indigo-700">
+                                <span class="text-xs text-slate-500">บาท</span>
+                            </div>
+                            <div id="slip-match-status" class="text-xs font-semibold hidden"></div>
+                            <img id="slip-preview-img" class="h-24 object-contain rounded-lg border hidden mt-1" alt="Slip Preview">
+                        </div>
+                    </div>
+
+                    <button onclick="submitPayment()" class="w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check-circle text-lg"></i> บันทึกรายการรับชำระเงิน
+                    </button>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- TAB 2: STUDENT MANAGEMENT -->
+        <div id="tab-students" class="tab-content hidden space-y-6 no-print">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-sky-100">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4 mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-700 flex items-center gap-2">
+                            <i class="fa-solid fa-users text-sky-600"></i> การจัดการรายชื่อนักเรียน (K-6)
+                        </h2>
+                        <p class="text-xs text-slate-400">เพิ่ม แก้ไข และดูรายชื่อนักเรียนระดับอนุบาลและประถม</p>
+                    </div>
+                    <button onclick="openStudentModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-user-plus"></i> เพิ่มนักเรียนใหม่
+                    </button>
+                </div>
+
+                <!-- Search & Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <input type="text" id="std-filter-search" onkeyup="renderStudentTable()" placeholder="ค้นหาด้วยชื่อ หรือ รหัสนักเรียน..." class="p-2 text-xs border border-slate-300 rounded-lg">
+                    <select id="std-filter-level" onchange="renderStudentTable()" class="p-2 text-xs border border-slate-300 rounded-lg">
+                        <option value="">-- ทุกระดับชั้น --</option>
+                        <option value="อนุบาล">ระดับอนุบาล (อ.1 - อ.3)</option>
+                        <option value="ประถมศึกษา">ระดับประถมศึกษา (ป.1 - ป.6)</option>
+                    </select>
+                    <select id="std-filter-class" onchange="renderStudentTable()" class="p-2 text-xs border border-slate-300 rounded-lg">
+                        <option value="">-- ทุกห้องเรียน --</option>
+                        <option value="อ.1">อ.1</option><option value="อ.2">อ.2</option><option value="อ.3">อ.3</option>
+                        <option value="ป.1">ป.1</option><option value="ป.2">ป.2</option><option value="ป.3">ป.3</option>
+                        <option value="ป.4">ป.4</option><option value="ป.5">ป.5</option><option value="ป.6">ป.6</option>
+                    </select>
+                </div>
+
+                <!-- Table -->
+                <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
-                        <thead class="bg-slate-50 text-slate-600 uppercase font-semibold">
+                        <thead class="bg-sky-50 text-slate-600 border-b">
                             <tr>
-                                <th class="p-3">รหัสนักเรียน</th>
+                                <th class="p-3">รหัสประจำตัว</th>
                                 <th class="p-3">ชื่อ - นามสกุล</th>
-                                <th class="p-3">ระดับชั้น</th>
-                                <th class="p-3">ผู้ปกครอง / เบอร์โทร</th>
-                                <th class="p-3 text-center">สถานะชำระเงิน</th>
+                                <th class="p-3">ระดับ/ชั้นเรียน</th>
+                                <th class="p-3">ชื่อผู้ปกครอง</th>
+                                <th class="p-3">เบอร์โทรศัพท์</th>
                                 <th class="p-3 text-center">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody id="student-table-body" class="divide-y divide-slate-100">
-                            <!-- Populated by JS -->
+                            <!-- Student rows rendered dynamically -->
                         </tbody>
                     </table>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- TAB 4: HISTORY & TRANSACTIONS -->
-        <section id="tab-history" class="tab-content hidden space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-                <div class="flex flex-wrap justify-between items-center gap-4 border-b pb-4">
+        <!-- TAB 3: TRANSACTION HISTORY & SLIP CHECK -->
+        <div id="tab-history" class="tab-content hidden space-y-6 no-print">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-sky-100">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4 mb-4">
                     <div>
-                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                            <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i> ประวัติรายการรับชำระเงิน
+                        <h2 class="text-base font-bold text-slate-700 flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-sky-600"></i> ประวัติรายการรับชำระเงิน & ตรวจสอบสลิป
                         </h2>
-                        <p class="text-xs text-slate-500">ตรวจสอบและพิมพ์ใบเสร็จย้อนหลัง</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <input type="date" id="daily-report-date" onchange="renderHistoryTable()" class="p-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <p class="text-xs text-slate-400">ตรวจสอบสถานะยอดเงินในสลิปการโอนกับระบบ</p>
                     </div>
                 </div>
 
-                <!-- History Table -->
-                <div class="overflow-x-auto border border-slate-100 rounded-xl">
+                <!-- Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+                    <select id="hist-filter-year" onchange="renderHistoryTable()" class="p-2 text-xs border border-slate-300 rounded-lg font-bold text-sky-700">
+                        <option value="">-- ทุกปีการศึกษา --</option>
+                        <option value="2569">ปีการศึกษา 2569</option>
+                        <option value="2568">ปีการศึกษา 2568</option>
+                        <option value="2567">ปีการศึกษา 2567</option>
+                    </select>
+                    <input type="text" id="hist-filter-search" onkeyup="renderHistoryTable()" placeholder="ค้นหาเลขรายการ / ชื่อนักเรียน / รหัส..." class="p-2 text-xs border border-slate-300 rounded-lg">
+                    <input type="date" id="hist-filter-date" onchange="renderHistoryTable()" class="p-2 text-xs border border-slate-300 rounded-lg">
+                    <select id="hist-filter-method" onchange="renderHistoryTable()" class="p-2 text-xs border border-slate-300 rounded-lg">
+                        <option value="">-- ทุกช่องทางชำระ --</option>
+                        <option value="เงินสด">เงินสด</option>
+                        <option value="สแกน QR Code">สแกน QR Code</option>
+                        <option value="โอนเงินธนาคาร">โอนเงินธนาคาร</option>
+                    </select>
+                </div>
+
+                <!-- Table -->
+                <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs">
-                        <thead class="bg-slate-50 text-slate-600 uppercase font-semibold">
+                        <thead class="bg-sky-50 text-slate-600 border-b">
                             <tr>
-                                <th class="p-3">เลขที่ใบเสร็จ</th>
+                                <th class="p-3">เลขที่รายการ</th>
+                                <th class="p-3">ปีการศึกษา</th>
                                 <th class="p-3">วันที่ / เวลา</th>
-                                <th class="p-3">ชื่อนักเรียน</th>
-                                <th class="p-3">ระดับชั้น</th>
-                                <th class="p-3 text-right">ยอดชำระสุทธิ</th>
-                                <th class="p-3 text-center">วิธีชำระ</th>
+                                <th class="p-3">นักเรียน (ชั้น)</th>
+                                <th class="p-3 text-right">ยอดสุทธิ</th>
+                                <th class="p-3 text-center">ช่องทาง</th>
+                                <th class="p-3 text-center">สถานะสลิป</th>
                                 <th class="p-3 text-center">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody id="history-table-body" class="divide-y divide-slate-100">
-                            <!-- Populated by JS -->
+                            <!-- Transactions rendered dynamically -->
                         </tbody>
                     </table>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- TAB 5: EXPORT DATA & REPORTS -->
-        <section id="tab-export" class="tab-content hidden space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
-                <div class="border-b pb-4">
+        <!-- TAB 4: REPORTS & 3-YEAR COMPARISON TABLE -->
+        <div id="tab-reports" class="tab-content hidden space-y-6 no-print">
+            
+            <!-- Controls & Filters for Reports -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-sky-100 flex flex-wrap items-center justify-between gap-4">
+                <div>
                     <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-file-arrow-down text-indigo-600"></i> ศูนย์รวมส่งออกข้อมูลและรายงาน (Export Center)
+                        <i class="fa-solid fa-chart-pie text-sky-600"></i> รายงานการรับชำระเงิน & การเปรียบเทียบ 3 ปีการศึกษา
                     </h2>
-                    <p class="text-xs text-slate-500">ดาวน์โหลดข้อมูลนักเรียนและรายงานการเงินในหลากหลายรูปแบบเพื่อนำไปใช้งานต่อ</p>
+                    <p class="text-xs text-slate-400">เลือกมุมมองรายงานสรุปรายวัน รายเดือน หรือตารางเปรียบเทียบเชิงวิเคราะห์</p>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Export Card 1: Students Excel -->
-                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-4">
-                        <div class="space-y-2">
-                            <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg font-bold">
-                                <i class="fa-solid fa-file-excel"></i>
-                            </div>
-                            <h3 class="text-sm font-bold text-slate-800">ส่งออกรายชื่อนักเรียน (Excel)</h3>
-                            <p class="text-xs text-slate-500">ดาวน์โหลดรายชื่อนักเรียนทั้งหมด พร้อมสถานะชำระเงินและข้อมูลผู้ปกครองในรูปแบบไฟล์ Excel (.xlsx)</p>
-                        </div>
-                        <button onclick="exportStudentsExcel()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-download"></i> ดาวน์โหลด Excel นักเรียน
-                        </button>
-                    </div>
-
-                    <!-- Export Card 2: Financial Report Excel -->
-                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-4">
-                        <div class="space-y-2">
-                            <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-lg font-bold">
-                                <i class="fa-solid fa-file-invoice-dollar"></i>
-                            </div>
-                            <h3 class="text-sm font-bold text-slate-800">ส่งออกรายงานการรับเงิน (Excel)</h3>
-                            <p class="text-xs text-slate-500">ดาวน์โหลดประวัติธุรกรรมและการรับเงินทั้งหมดเพื่อทำบัญชีประจำวัน/ประจำเดือน (.xlsx)</p>
-                        </div>
-                        <button onclick="exportFinancialExcel()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-download"></i> ดาวน์โหลดรายงานการเงิน
-                        </button>
-                    </div>
-
-                    <!-- Export Card 3: Print Full Report -->
-                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-4">
-                        <div class="space-y-2">
-                            <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg font-bold">
-                                <i class="fa-solid fa-print"></i>
-                            </div>
-                            <h3 class="text-sm font-bold text-slate-800">พิมพ์รายงานสรุปภาพรวม</h3>
-                            <p class="text-xs text-slate-500">พิมพ์เอกสารสรุปยอดรับเงินและรายชื่อผู้ชำระเงินในรูปแบบกระดาษ A4 หรือบันทึกเป็น PDF</p>
-                        </div>
-                        <button onclick="window.print()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-print"></i> พิมพ์รายงาน / PDF
-                        </button>
-                    </div>
+                <div class="flex items-center gap-2">
+                    <select id="report-view-type" onchange="toggleReportSubView()" class="p-2 text-xs border border-slate-300 rounded-xl font-bold text-slate-700 bg-slate-50">
+                        <option value="comparison">ตารางเปรียบเทียบ 3 ปีการศึกษา (2567-2569)</option>
+                        <option value="daily">รายงานรับชำระเงินประจำวัน</option>
+                        <option value="monthly">รายงานรับชำระเงินประจำเดือน</option>
+                    </select>
                 </div>
             </div>
-        </section>
 
-    </main>
-
-    <!-- EXCEL / AI IMPORT MODAL -->
-    <div id="excel-import-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50 no-print">
-        <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> นำเข้าข้อมูลนักเรียนด้วยไฟล์ Excel / CSV ผ่าน Google Gemini AI
-                </h3>
-                <button onclick="closeExcelImportModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-
-            <div class="space-y-4 overflow-y-auto flex-grow pr-1">
-                <!-- Gemini API Key configuration -->
-                <div class="bg-sky-50 p-3 rounded-xl border border-sky-200 flex items-center gap-3">
-                    <div class="flex-shrink-0 text-sky-600">
-                        <i class="fa-solid fa-key text-lg"></i>
+            <!-- SUB-VIEW 1: 3-YEAR COMPARISON TABLE -->
+            <div id="subview-comparison" class="space-y-6">
+                <!-- Fee Items 3-Year Comparison Card -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-sky-100 space-y-4">
+                    <div class="flex justify-between items-center border-b pb-3">
+                        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-amber-500"></i> ตารางเปรียบเทียบรายรับรวม แยกตามรายการค่าธรรมเนียม (8 รายการ)
+                        </h3>
+                        <span class="text-xs bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">เปรียบเทียบปี 2567 vs 2568 vs 2569</span>
                     </div>
-                    <div class="flex-grow">
-                        <label class="block text-[11px] font-bold text-sky-800 mb-0.5">Gemini API Key (ตั้งค่าหลักถาวรเรียบร้อยแล้ว)</label>
-                        <input type="password" id="gemini-api-key" oninput="saveGeminiApiKey(this.value)" placeholder="API Key ถูกตั้งค่าไว้ใช้งานถาวรแล้ว" class="w-full p-1.5 text-xs border border-sky-300 rounded-lg bg-white">
-                    </div>
-                </div>
-
-                <!-- Step 1: Upload File -->
-                <div class="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center space-y-3 hover:border-indigo-500 transition cursor-pointer" onclick="document.getElementById('import-file-input').click()">
-                    <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-xl">
-                        <i class="fa-solid fa-file-arrow-up"></i>
-                    </div>
-                    <div>
-                        <h4 class="text-sm font-bold text-slate-700">คลิกเพื่ออัปโหลดไฟล์ Excel (.xlsx, .xls) หรือ CSV</h4>
-                        <p class="text-xs text-slate-400 mt-1">ระบบจะอ่านข้อมูลดิบและให้ Gemini AI ช่วยวิเคราะห์และจัดระเบียบโครงสร้างนักเรียนอัตโนมัติ</p>
-                    </div>
-                    <input type="file" id="import-file-input" accept=".xlsx, .xls, .csv" onchange="handleFileSelected(event)" class="hidden">
-                </div>
-
-                <!-- Loading state -->
-                <div id="ai-loading-state" class="hidden py-8 text-center space-y-3">
-                    <div class="inline-block animate-spin text-indigo-600 text-3xl">
-                        <i class="fa-solid fa-spinner"></i>
-                    </div>
-                    <p class="text-xs font-bold text-slate-700">กำลังให้ Gemini AI วิเคราะห์และจัดโครงสร้างข้อมูลนักเรียน...</p>
-                </div>
-
-                <!-- Step 2: Preview & Select Table -->
-                <div id="import-preview-section" class="hidden space-y-3">
-                    <div class="flex justify-between items-center">
-                        <h4 class="text-xs font-bold text-slate-700">ตัวอย่างข้อมูลที่ AI วิเคราะห์ได้ (เลือกรายการที่ต้องการนำเข้า)</h4>
-                        <div class="space-x-2">
-                            <button onclick="toggleSelectAllImport(true)" class="text-[11px] text-indigo-600 hover:underline font-semibold">เลือกทั้งหมด</button>
-                            <span class="text-slate-300">|</span>
-                            <button onclick="toggleSelectAllImport(false)" class="text-[11px] text-slate-500 hover:underline font-semibold">ยกเลิกเลือกทั้งหมด</button>
-                        </div>
-                    </div>
-                    <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-xl">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-50 text-slate-600 sticky top-0 font-semibold">
-                                <tr>
-                                    <th class="p-2.5 text-center w-10"><input type="checkbox" id="select-all-checkbox" checked onchange="toggleSelectAllImport(this.checked)"></th>
-                                    <th class="p-2.5">รหัสนักเรียน</th>
-                                    <th class="p-2.5">ชื่อ - นามสกุล</th>
-                                    <th class="p-2.5">ระดับชั้น</th>
-                                    <th class="p-2.5">ผู้ปกครอง / โทร</th>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 border-b">
+                                    <th class="p-3">รายการค่าธรรมเนียม</th>
+                                    <th class="p-3 text-right">ปีการศึกษา 2567</th>
+                                    <th class="p-3 text-right">ปีการศึกษา 2568</th>
+                                    <th class="p-3 text-right">ปีการศึกษา 2569</th>
+                                    <th class="p-3 text-center">เติบโต (67->68)</th>
+                                    <th class="p-3 text-center">เติบโต (68->69)</th>
                                 </tr>
                             </thead>
-                            <tbody id="import-preview-tbody" class="divide-y divide-slate-100">
-                                <!-- Populated by JS -->
+                            <tbody id="comp-fee-table-body" class="divide-y divide-slate-100">
+                                <!-- Computed via JS -->
+                            </tbody>
+                            <tfoot id="comp-fee-table-foot" class="bg-sky-50 font-bold border-t border-sky-200">
+                                <!-- Computed Totals via JS -->
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Level Comparison (Kinder vs Primary) -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-sky-100 space-y-4">
+                    <h3 class="font-bold text-slate-800 text-sm border-b pb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-emerald-500"></i> เปรียบเทียบรายรับรวม แยกตามระดับชั้น (อนุบาล vs ประถมศึกษา)
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 border-b">
+                                    <th class="p-3">ระดับชั้น</th>
+                                    <th class="p-3 text-right">ปีการศึกษา 2567</th>
+                                    <th class="p-3 text-right">ปีการศึกษา 2568</th>
+                                    <th class="p-3 text-right">ปีการศึกษา 2569</th>
+                                    <th class="p-3 text-center">สัดส่วนปี 2569</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comp-level-table-body" class="divide-y divide-slate-100">
+                                <!-- Computed via JS -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <div class="border-t pt-3 flex justify-end gap-2">
-                <button onclick="closeExcelImportModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">ยกเลิก</button>
-                <button id="btn-confirm-import" onclick="confirmImportStudents()" class="hidden px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition">นำเข้าข้อมูลที่เลือก</button>
+            <!-- SUB-VIEW 2: DAILY REPORT -->
+            <div id="subview-daily" class="hidden bg-white p-6 rounded-2xl shadow-sm border border-sky-100 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
+                    <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-day text-sky-600"></i> รายงานสรุปยอดการรับชำระประจำวัน
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-slate-500">เลือกวันที่:</label>
+                        <input type="date" id="daily-report-date" onchange="renderDailyReport()" class="p-1.5 text-xs border border-slate-300 rounded-lg">
+                    </div>
+                </div>
+
+                <!-- Summary Breakdown Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+                        <span class="text-xs text-emerald-600 font-semibold">ชำระด้วยเงินสด</span>
+                        <h4 class="text-lg font-bold text-emerald-700" id="daily-cash-total">฿0</h4>
+                    </div>
+                    <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-center">
+                        <span class="text-xs text-indigo-600 font-semibold">ชำระด้วยการโอน / QR</span>
+                        <h4 class="text-lg font-bold text-indigo-700" id="daily-transfer-total">฿0</h4>
+                    </div>
+                    <div class="bg-sky-50 p-3 rounded-xl border border-sky-100 text-center">
+                        <span class="text-xs text-sky-600 font-semibold">รวมรายรับสุทธิประวัน</span>
+                        <h4 class="text-xl font-bold text-sky-800" id="daily-grand-total">฿0</h4>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto pt-2">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 text-slate-600 border-b">
+                            <tr>
+                                <th class="p-2.5">เวลา</th>
+                                <th class="p-2.5">เลขที่รายการ</th>
+                                <th class="p-2.5">นักเรียน (ชั้น)</th>
+                                <th class="p-2.5">รายการ</th>
+                                <th class="p-2.5 text-center">ช่องทาง</th>
+                                <th class="p-2.5 text-right">จำนวนเงิน</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daily-report-tbody" class="divide-y divide-slate-100">
+                            <!-- Dynamic Daily Rows -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            <!-- SUB-VIEW 3: MONTHLY REPORT -->
+            <div id="subview-monthly" class="hidden bg-white p-6 rounded-2xl shadow-sm border border-sky-100 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
+                    <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-indigo-600"></i> รายงานสรุปยอดการรับชำระประจำเดือน
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-slate-500">เลือกปีการศึกษา:</label>
+                        <select id="monthly-report-year" onchange="renderMonthlyReport()" class="p-1.5 text-xs border border-slate-300 rounded-lg font-bold text-indigo-700">
+                            <option value="2569" selected>2569</option>
+                            <option value="2568">2568</option>
+                            <option value="2567">2567</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-700 border-b">
+                                <th class="p-3">เดือน</th>
+                                <th class="p-3 text-center">จำนวนรายการ</th>
+                                <th class="p-3 text-right">ยอดเงินสด</th>
+                                <th class="p-3 text-right">ยอดเงินโอน</th>
+                                <th class="p-3 text-right font-bold">รวมรายรับสุทธิ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthly-report-tbody" class="divide-y divide-slate-100">
+                            <!-- Dynamic Monthly Rows -->
+                        </tbody>
+                        <tfoot id="monthly-report-tfoot" class="bg-indigo-50 font-bold border-t border-indigo-200">
+                            <!-- Monthly Footers -->
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
         </div>
+
     </div>
 
-    <!-- STUDENT ADD/EDIT MODAL -->
+    <!-- STUDENT MODAL (ADD / EDIT) -->
     <div id="student-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50 no-print">
         <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 id="student-modal-title" class="text-base font-bold text-slate-800">เพิ่มนักเรียนใหม่</h3>
-                <button onclick="closeStudentModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <form id="student-form" onsubmit="saveStudentForm(event)" class="space-y-3">
-                <input type="hidden" id="edit-student-id">
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-700">รหัสนักเรียน</label>
-                    <input type="text" id="form-student-code" required placeholder="เช่น ST69001" class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <h3 class="text-base font-bold text-slate-800 border-b pb-2" id="modal-std-title">เพิ่มข้อมูลนักเรียนใหม่</h3>
+            <form id="student-form" onsubmit="saveStudent(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="edit-std-original-id">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">รหัสประจำตัวนักเรียน *</label>
+                    <input type="text" id="m-std-id" required class="w-full p-2 border rounded-lg focus:ring-1 focus:ring-sky-500">
                 </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-700">ชื่อ - นามสกุล</label>
-                    <input type="text" id="form-student-name" required placeholder="ด.ช. รักเรียน เพียรศึกษา" class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">ชื่อ - นามสกุล *</label>
+                    <input type="text" id="m-std-name" required class="w-full p-2 border rounded-lg focus:ring-1 focus:ring-sky-500">
                 </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-700">ระดับชั้น</label>
-                    <select id="form-student-class" required class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        <option value="อนุบาล 1">อนุบาล 1</option>
-                        <option value="อนุบาล 2">อนุบาล 2</option>
-                        <option value="อนุบาล 3">อนุบาล 3</option>
-                        <option value="ประถมศึกษาปีที่ 1">ประถมศึกษาปีที่ 1</option>
-                        <option value="ประถมศึกษาปีที่ 2">ประถมศึกษาปีที่ 2</option>
-                        <option value="ประถมศึกษาปีที่ 3">ประถมศึกษาปีที่ 3</option>
-                        <option value="ประถมศึกษาปีที่ 4">ประถมศึกษาปีที่ 4</option>
-                        <option value="ประถมศึกษาปีที่ 5">ประถมศึกษาปีที่ 5</option>
-                        <option value="ประถมศึกษาปีที่ 6">ประถมศึกษาปีที่ 6</option>
-                    </select>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-600 mb-1">ระดับชั้น *</label>
+                        <select id="m-std-level" required onchange="updateClassOptions()" class="w-full p-2 border rounded-lg">
+                            <option value="อนุบาล">อนุบาล</option>
+                            <option value="ประถมศึกษา">ประถมศึกษา</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 mb-1">ห้องเรียน *</label>
+                        <select id="m-std-class" required class="w-full p-2 border rounded-lg">
+                            <!-- Filled dynamically -->
+                        </select>
+                    </div>
                 </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-700">ชื่อผู้ปกครอง</label>
-                    <input type="text" id="form-parent-name" placeholder="นายสมชาย ใจดี" class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">ชื่อ-นามสกุล ผู้ปกครอง</label>
+                    <input type="text" id="m-std-parent" class="w-full p-2 border rounded-lg">
                 </div>
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold text-slate-700">เบอร์โทรศัพท์ผู้ปกครอง</label>
-                    <input type="text" id="form-parent-phone" placeholder="081-234-5678" class="w-full p-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <div>
+                    <label class="block font-semibold text-slate-600 mb-1">เบอร์โทรศัพท์ติดต่อ</label>
+                    <input type="tel" id="m-std-phone" class="w-full p-2 border rounded-lg">
                 </div>
-                <div class="pt-3 border-t flex justify-end gap-2">
-                    <button type="button" onclick="closeStudentModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">ยกเลิก</button>
-                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition">บันทึกข้อมูล</button>
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" onclick="closeStudentModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300">ยกเลิก</button>
+                    <button type="submit" class="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 font-semibold">บันทึกข้อมูล</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- JavaScript Logic -->
+    <!-- SLIP VIEW MODAL -->
+    <div id="slip-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-slate-800 text-sm">หลักฐานสลิปการโอนเงิน</h3>
+                <button onclick="closeSlipModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-2 text-xs">
+                <p><span class="text-slate-500">เลขที่รายการ:</span> <strong id="modal-slip-rec-id"></strong></p>
+                <p><span class="text-slate-500">ยอดเงินในระบบ:</span> <strong id="modal-slip-system-amount" class="text-emerald-600"></strong></p>
+                <p><span class="text-slate-500">ยอดเงินระบุในสลิป:</span> <strong id="modal-slip-user-amount" class="text-indigo-600"></strong></p>
+                <div id="modal-slip-match-badge" class="py-1 px-3 rounded-lg font-bold text-center"></div>
+                <div class="border rounded-xl p-2 bg-slate-50 flex items-center justify-center min-h-[160px]">
+                    <img id="modal-slip-image" class="max-h-64 object-contain rounded-lg" src="" alt="Slip Image">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Application Script -->
     <script>
-        // Default Data Fee Items
-        const defaultFeeItems = [
-            { id: 'f1', name: 'ค่าเทอมภาคเรียนที่ 1', amount: 3500 },
-            { id: 'f2', name: 'ค่าบำรุงการศึกษาและอุปกรณ์การเรียน', amount: 1200 },
-            { id: 'f3', name: 'ค่าอาหารเสริม (นม) และอาหารกลางวัน', amount: 800 },
-            { id: 'f4', name: 'ค่ากิจกรรมทัศนศึกษา', amount: 500 },
-            { id: 'f5', name: 'ค่าประกันอุบัติเหตุกลุ่ม', amount: 300 }
+        // Preset K-6 Fee Master Categories (8 Specified Items)
+        const feeCatalog = [
+            { id: 'f1', name: '1. ค่าอาหาร', amount: 3000 },
+            { id: 'f2', name: '2. ค่าแม่บ้าน', amount: 500 },
+            { id: 'f3', name: '3. ค่าเรียนคอมพิวเตอร์', amount: 1200 },
+            { id: 'f4', name: '4. ค่าเทอม', amount: 4500 },
+            { id: 'f5', name: '5. ค่าสมัครแรกเข้า', amount: 1000 },
+            { id: 'f6', name: '6. ค่าประกันชีวิต', amount: 500 },
+            { id: 'f7', name: '7. ค่ากิจกรรมชุมนุม', amount: 800 }
         ];
 
-        // Default Sample Students
+        // Initial Mock Students (K-6)
         const defaultStudents = [
-            { id: 'S001', code: 'ST69001', name: 'ด.ช. อาทิตย์ สว่างใส', className: 'อนุบาล 2', parentName: 'คุณแม่ดวงดาว', parentPhone: '089-111-2223', status: 'ยังไม่ชำระ' },
-            { id: 'S002', code: 'ST69002', name: 'ด.ญ. ปานวาด รักษ์ไทย', className: 'อนุบาล 3', parentName: 'คุณพ่อประเสริฐ', parentPhone: '081-333-4445', status: 'ยังไม่ชำระ' },
-            { id: 'S003', code: 'ST69003', name: 'ด.ช. ธนกร พัฒนากุล', className: 'ประถมศึกษาปีที่ 1', parentName: 'คุณแม่สุภาภรณ์', parentPhone: '086-555-6667', status: 'ยังไม่ชำระ' },
-            { id: 'S004', code: 'ST69004', name: 'ด.ญ. ณิชารีย์ มั่นคง', className: 'ประถมศึกษาปีที่ 3', parentName: 'คุณพ่อวีระ', parentPhone: '084-888-9990', status: 'ยังไม่ชำระ' }
+            { id: 'K6601', name: 'เด็กชายปัญญากร มีสุข', level: 'อนุบาล', class: 'อ.1', parent: 'นายสมชาย มีสุข', phone: '081-234-5678' },
+            { id: 'K6602', name: 'เด็กหญิงกัญญารัตน์ สว่างศรี', level: 'อนุบาล', class: 'อ.3', parent: 'นางปราณี สว่างศรี', phone: '089-876-5432' },
+            { id: 'P6601', name: 'เด็กชายธนกฤต เจริญพร', level: 'ประถมศึกษา', class: 'ป.1', parent: 'นายวิชัย เจริญพร', phone: '086-555-4321' },
+            { id: 'P6602', name: 'เด็กหญิงณิชาภัทร วงศ์ดี', level: 'ประถมศึกษา', class: 'ป.4', parent: 'นางสิริพร วงศ์ดี', phone: '082-111-9999' },
+            { id: 'P6603', name: 'เด็กชายศุภกร กิจเจริญ', level: 'ประถมศึกษา', class: 'ป.6', parent: 'นายเกรียงไกร กิจเจริญ', phone: '084-333-2222' }
         ];
 
+        // Mock 3-Year Data (2567, 2568, 2569)
+        const defaultTransactions = [
+            // 2569 Transactions
+            {
+                id: 'REC2569001', academicYear: '2569', date: '2026-11-10T09:30:00.000Z',
+                studentId: 'K6601', studentName: 'เด็กชายปัญญากร มีสุข', studentLevel: 'อนุบาล', studentClass: 'อ.1',
+                items: [{ name: '4. ค่าเทอม', price: 4500 }, { name: '1. ค่าอาหาร', price: 3000 }],
+                subtotal: 7500, discount: 0, grandTotal: 7500, paymentMethod: 'โอนเงินธนาคาร',
+                slipData: { slipAmount: 7500, isMatched: true, imgData: '' }
+            },
+            {
+                id: 'REC2569002', academicYear: '2569', date: '2026-11-11T10:15:00.000Z',
+                studentId: 'P6601', studentName: 'เด็กชายธนกฤต เจริญพร', studentLevel: 'ประถมศึกษา', studentClass: 'ป.1',
+                items: [{ name: '4. ค่าเทอม', price: 4500 }, { name: '3. ค่าเรียนคอมพิวเตอร์', price: 1200 }, { name: '6. ค่าประกันชีวิต', price: 500 }],
+                subtotal: 6200, discount: 200, grandTotal: 6000, paymentMethod: 'เงินสด',
+                slipData: null
+            },
+            // 2568 Transactions
+            {
+                id: 'REC2568015', academicYear: '2568', date: '2025-05-15T08:45:00.000Z',
+                studentId: 'K6602', studentName: 'เด็กหญิงกัญญารัตน์ สว่างศรี', studentLevel: 'อนุบาล', studentClass: 'อ.2',
+                items: [{ name: '4. ค่าเทอม', price: 4200 }, { name: '1. ค่าอาหาร', price: 2800 }, { name: '2. ค่าแม่บ้าน', price: 500 }],
+                subtotal: 7500, discount: 0, grandTotal: 7500, paymentMethod: 'สแกน QR Code',
+                slipData: { slipAmount: 7500, isMatched: true, imgData: '' }
+            },
+            {
+                id: 'REC2568042', academicYear: '2568', date: '2025-10-12T13:20:00.000Z',
+                studentId: 'P6602', studentName: 'เด็กหญิงณิชาภัทร วงศ์ดี', studentLevel: 'ประถมศึกษา', studentClass: 'ป.3',
+                items: [{ name: '4. ค่าเทอม', price: 4200 }, { name: '3. ค่าเรียนคอมพิวเตอร์', price: 1000 }],
+                subtotal: 5200, discount: 0, grandTotal: 5200, paymentMethod: 'โอนเงินธนาคาร',
+                slipData: { slipAmount: 5000, isMatched: false, imgData: '' }
+            },
+            // 2567 Transactions
+            {
+                id: 'REC2567008', academicYear: '2567', date: '2024-05-10T11:00:00.000Z',
+                studentId: 'P6603', studentName: 'เด็กชายศุภกร กิจเจริญ', studentLevel: 'ประถมศึกษา', studentClass: 'ป.4',
+                items: [{ name: '4. ค่าเทอม', price: 4000 }, { name: '5. ค่าสมัครแรกเข้า', price: 1000 }, { name: '7. ค่ากิจกรรมชุมนุม', price: 800 }],
+                subtotal: 5800, discount: 300, grandTotal: 5500, paymentMethod: 'เงินสด',
+                slipData: null
+            }
+        ];
+
+        // App States
         let students = JSON.parse(localStorage.getItem('k6_students_v2')) || defaultStudents;
-        let transactions = JSON.parse(localStorage.getItem('k6_transactions_v2')) || [];
+        let transactions = JSON.parse(localStorage.getItem('k6_transactions_v2')) || defaultTransactions;
         let selectedStudent = null;
         let currentSlipBase64 = '';
-        let parsedImportStudents = [];
+        let customItemsCounter = 1;
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Set permanent Gemini API Key automatically
-            if (!localStorage.getItem('k6_gemini_api_key')) {
-                localStorage.setItem('k6_gemini_api_key', 'AQ.Ab8RN6K2KgGtvnQm-KASDSr86V8xChyJncXrDhXa24FUfTztRQ');
-            }
-
             renderFeeItems();
             populateStudentDropdown();
             renderStudentTable();
             renderHistoryTable();
             updateDashboardStats();
+            updateClassOptions();
+            renderComparisonTable();
             document.getElementById('daily-report-date').value = new Date().toISOString().split('T')[0];
-
-            const savedApiKey = localStorage.getItem('k6_gemini_api_key');
-            if (savedApiKey) {
-                document.getElementById('gemini-api-key').value = savedApiKey;
-            }
         });
-
-        // Save Gemini API Key permanently to localStorage
-        function saveGeminiApiKey(key) {
-            localStorage.setItem('k6_gemini_api_key', key.trim());
-        }
 
         // Tab Navigation
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById(tabId).classList.remove('hidden');
 
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('bg-indigo-800', 'text-white');
-                btn.classList.add('text-indigo-100');
+            document.querySelectorAll('header button').forEach(btn => {
+                btn.className = 'px-3 py-1.5 rounded-lg transition text-white hover:bg-white/10 flex items-center gap-1.5 text-xs';
             });
-            event.currentTarget.classList.add('bg-indigo-800', 'text-white');
-            event.currentTarget.classList.remove('text-indigo-100');
+            const activeBtn = document.getElementById('btn-' + tabId);
+            if (activeBtn) {
+                activeBtn.className = 'px-3 py-1.5 rounded-lg transition bg-white text-sky-700 shadow-sm flex items-center gap-1.5 text-xs';
+            }
+
+            if (tabId === 'tab-reports') {
+                toggleReportSubView();
+            }
         }
 
-        // Dashboard Stats
-        function updateDashboardStats() {
-            const totalStudents = students.length;
-            const paidStudents = students.filter(s => s.status === 'ชำระแล้ว').length;
-            const pendingStudents = totalStudents - paidStudents;
-            
-            let totalRevenue = transactions.reduce((sum, t) => sum + t.grandTotal, 0);
-
-            document.getElementById('stat-total-revenue').innerText = totalRevenue.toLocaleString('th-TH', {minimumFractionDigits: 2}) + ' ฿';
-            document.getElementById('stat-paid-count').innerText = paidStudents + ' คน';
-            document.getElementById('stat-pending-count').innerText = pendingStudents + ' คน';
-            document.getElementById('stat-total-students').innerText = totalStudents + ' คน';
-
-            // Class summary breakdown
-            const classes = ['อนุบาล 1', 'อนุบาล 2', 'อนุบาล 3', 'ประถมศึกษาปีที่ 1', 'ประถมศึกษาปีที่ 2', 'ประถมศึกษาปีที่ 3', 'ประถมศึกษาปีที่ 4', 'ประถมศึกษาปีที่ 5', 'ประถมศึกษาปีที่ 6'];
-            const container = document.getElementById('class-summary-container');
-            container.innerHTML = '';
-
-            classes.forEach(cls => {
-                const classStudents = students.filter(s => s.className === cls);
-                const count = classStudents.length;
-                if (count > 0) {
-                    const paidCount = classStudents.filter(s => s.status === 'ชำระแล้ว').length;
-                    const percent = Math.round((paidCount / count) * 100);
-                    container.innerHTML += `
-                        <div class="space-y-1">
-                            <div class="flex justify-between text-xs font-semibold">
-                                <span class="text-slate-700">${cls} (${count} คน)</span>
-                                <span class="text-indigo-600">ชำระแล้ว ${paidCount}/${count} (${percent}%)</span>
-                            </div>
-                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                                <div class="bg-indigo-600 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
-                            </div>
-                        </div>
-                    `;
-                }
-            });
-        }
-
-        // Render Fee Items in Payment Tab
+        // Render Fee Catalog Checkboxes
         function renderFeeItems() {
             const container = document.getElementById('fee-items-container');
-            container.innerHTML = '';
-            defaultFeeItems.forEach(item => {
-                container.innerHTML += `
-                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
-                        <div class="flex items-center gap-3">
-                            <input type="checkbox" value="${item.id}" data-amount="${item.amount}" data-name="${item.name}" onchange="calculateTotalPayment()" class="fee-checkbox w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" checked>
-                            <span class="text-xs font-medium text-slate-800">${item.name}</span>
+            container.innerHTML = feeCatalog.map(fee => `
+                <div class="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-sky-50/50 transition gap-2">
+                    <label class="flex items-start cursor-pointer flex-grow min-w-0">
+                        <input type="checkbox" value="${fee.id}" data-name="${fee.name}" onchange="calculateTotal()" class="fee-checkbox mt-1 text-sky-600 rounded flex-shrink-0">
+                        <div class="ml-2.5 min-w-0">
+                            <span class="text-xs font-semibold text-slate-800 block truncate" title="${fee.name}">${fee.name}</span>
                         </div>
-                        <span class="text-xs font-bold text-indigo-600">${item.amount.toLocaleString()} ฿</span>
                     </label>
-                `;
-            });
-            calculateTotalPayment();
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        <span class="text-xs text-slate-400">฿</span>
+                        <input type="number" id="price-input-${fee.id}" value="${fee.amount}" min="0" oninput="calculateTotal()" class="fee-price-input w-20 p-1 text-right text-xs font-bold text-sky-600 border border-slate-300 rounded-lg focus:ring-1 focus:ring-sky-500">
+                    </div>
+                </div>
+            `).join('');
         }
 
-        // Filter Students for Payment Tab Search
-        function filterPaymentStudents(query) {
-            const dropdown = document.getElementById('payment-student-dropdown');
-            if (!query.trim()) {
-                dropdown.classList.add('hidden');
+        function populateStudentDropdown(filterText = '') {
+            const select = document.getElementById('pay-student-select');
+            select.innerHTML = '<option value="">-- กรุณาเลือกนักเรียน --</option>';
+
+            const filtered = students.filter(s => 
+                s.name.toLowerCase().includes(filterText.toLowerCase()) || 
+                s.id.toLowerCase().includes(filterText.toLowerCase())
+            );
+
+            filtered.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.innerText = `[${s.id}] ${s.name} (${s.class})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function searchStudentDropdown() {
+            populateStudentDropdown(document.getElementById('pay-search-student').value);
+        }
+
+        function onSelectStudent() {
+            const id = document.getElementById('pay-student-select').value;
+            selectedStudent = students.find(s => s.id === id);
+
+            const card = document.getElementById('selected-student-card');
+            if (selectedStudent) {
+                document.getElementById('disp-std-id').innerText = selectedStudent.id;
+                document.getElementById('disp-std-level').innerText = selectedStudent.level;
+                document.getElementById('disp-std-name').innerText = selectedStudent.name;
+                document.getElementById('disp-std-class').innerText = selectedStudent.class;
+                document.getElementById('disp-std-parent').innerText = selectedStudent.parent || '-';
+                document.getElementById('disp-std-phone').innerText = selectedStudent.phone || '-';
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        }
+
+        function addCustomFeeItem() {
+            const nameInput = document.getElementById('custom-item-name');
+            const priceInput = document.getElementById('custom-item-price');
+
+            if (!nameInput.value || priceInput.value === '' || priceInput.value < 0) {
+                alert('กรุณากรอกชื่อรายการและจำนวนเงินให้ถูกต้อง');
                 return;
             }
-            const filtered = students.filter(s => s.name.includes(query) || s.code.includes(query) || s.className.includes(query));
-            dropdown.innerHTML = '';
-            if (filtered.length === 0) {
-                dropdown.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center">ไม่พบรายชื่อนักเรียน</div>';
-            } else {
-                filtered.forEach(s => {
-                    dropdown.innerHTML += `
-                        <div onclick='selectPaymentStudent(${JSON.stringify(s)})' class="p-2.5 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 text-xs flex justify-between items-center">
-                            <div><strong class="text-slate-800">${s.name}</strong> <span class="text-slate-500">(${s.code})</span></div>
-                            <span class="text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">${s.className}</span>
+
+            const customId = 'custom_' + customItemsCounter++;
+            const container = document.getElementById('fee-items-container');
+
+            const div = document.createElement('div');
+            div.className = 'col-span-1 sm:col-span-2';
+            div.innerHTML = `
+                <div class="flex items-center justify-between p-3 border border-amber-200 bg-amber-50/40 rounded-xl hover:bg-amber-50 transition gap-2">
+                    <label class="flex items-start cursor-pointer flex-grow min-w-0">
+                        <input type="checkbox" value="${customId}" data-name="8. อื่นๆ: ${nameInput.value}" checked onchange="calculateTotal()" class="fee-checkbox mt-1 text-amber-600 rounded flex-shrink-0">
+                        <div class="ml-2.5 min-w-0">
+                            <span class="text-xs font-semibold text-slate-800 block truncate">8. อื่นๆ: ${nameInput.value}</span>
                         </div>
-                    `;
-                });
-            }
-            dropdown.classList.remove('hidden');
+                    </label>
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        <span class="text-xs text-slate-400">฿</span>
+                        <input type="number" id="price-input-${customId}" value="${priceInput.value}" min="0" oninput="calculateTotal()" class="fee-price-input w-20 p-1 text-right text-xs font-bold text-amber-600 border border-slate-300 rounded-lg focus:ring-1 focus:ring-sky-500">
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+
+            nameInput.value = '';
+            priceInput.value = '';
+            calculateTotal();
         }
 
-        function selectPaymentStudent(student) {
-            selectedStudent = student;
-            document.getElementById('payment-student-dropdown').classList.add('hidden');
-            document.getElementById('payment-search').value = student.name;
-            
-            document.getElementById('card-student-code').innerText = 'ID: ' + student.code;
-            document.getElementById('card-student-name').innerText = student.name;
-            document.getElementById('card-student-class').innerText = 'ระดับชั้น: ' + student.className;
-            document.getElementById('selected-student-card').classList.remove('hidden');
-
-            document.getElementById('preview-student-name').innerText = student.name;
-            document.getElementById('preview-student-class').innerText = student.className;
-            document.getElementById('preview-date').innerText = new Date().toLocaleDateString('th-TH');
-            document.getElementById('preview-receipt-no').innerText = 'เลขที่: REC-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*9000)+1000);
-        }
-
-        function clearSelectedStudent() {
-            selectedStudent = null;
-            document.getElementById('payment-search').value = '';
-            document.getElementById('selected-student-card').classList.add('hidden');
-            document.getElementById('preview-student-name').innerText = '-';
-            document.getElementById('preview-student-class').innerText = '-';
-        }
-
-        function calculateTotalPayment() {
+        function calculateTotal() {
             const checkboxes = document.querySelectorAll('.fee-checkbox:checked');
             let subtotal = 0;
-            let previewItemsHtml = '';
 
             checkboxes.forEach(cb => {
-                const amt = parseFloat(cb.getAttribute('data-amount'));
-                const name = cb.getAttribute('data-name');
-                subtotal += amt;
-                previewItemsHtml += `<tr><td class="py-1">${name}</td><td class="text-right">${amt.toLocaleString()} ฿</td></tr>`;
+                const itemId = cb.value;
+                const priceInput = document.getElementById(`price-input-${itemId}`);
+                const price = priceInput ? parseFloat(priceInput.value) || 0 : 0;
+                subtotal += price;
             });
 
-            const discount = parseFloat(document.getElementById('payment-discount').value) || 0;
-            let grandTotal = Math.max(0, subtotal - discount);
+            const discount = parseFloat(document.getElementById('discount-input').value) || 0;
+            const grandTotal = Math.max(0, subtotal - discount);
 
-            if (checkboxes.length === 0) {
-                previewItemsHtml = '<tr><td colspan="2" class="text-center text-slate-400 py-2">ยังไม่ได้เลือกรายการ</td></tr>';
-            }
-
-            document.getElementById('preview-items-list').innerHTML = previewItemsHtml;
-            document.getElementById('preview-discount').innerText = discount.toLocaleString() + ' ฿';
-            document.getElementById('preview-total').innerText = grandTotal.toLocaleString('th-TH', {minimumFractionDigits: 2}) + ' ฿';
-            document.getElementById('payment-grand-total').innerText = grandTotal.toLocaleString('th-TH', {minimumFractionDigits: 2}) + ' ฿';
+            document.getElementById('subtotal-amount').innerText = `฿${subtotal.toLocaleString()}`;
+            document.getElementById('grand-total-amount').innerText = `฿${grandTotal.toLocaleString()}`;
+            checkSlipMatch();
         }
 
-        function handleSlipUpload(event) {
+        function toggleSlipBox(show) {
+            const sec = document.getElementById('slip-upload-section');
+            if (show) sec.classList.remove('hidden');
+            else sec.classList.add('hidden');
+        }
+
+        function previewSlipImage(event) {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     currentSlipBase64 = e.target.result;
-                    document.getElementById('slip-preview-img').src = currentSlipBase64;
-                    document.getElementById('slip-preview-container').classList.remove('hidden');
+                    const img = document.getElementById('slip-preview-img');
+                    img.src = currentSlipBase64;
+                    img.classList.remove('hidden');
                 }
                 reader.readAsDataURL(file);
             }
         }
 
-        function removeSlip() {
-            currentSlipBase64 = '';
-            document.getElementById('slip-file-input').value = '';
-            document.getElementById('slip-preview-container').classList.add('hidden');
+        function checkSlipMatch() {
+            const method = document.querySelector('input[name="pay-method"]:checked').value;
+            if (method === 'เงินสด') return;
+
+            const grandTotalStr = document.getElementById('grand-total-amount').innerText.replace('฿', '').replace(/,/g, '');
+            const grandTotal = parseFloat(grandTotalStr) || 0;
+            const slipVal = parseFloat(document.getElementById('slip-amount-input').value) || 0;
+            const badge = document.getElementById('slip-match-status');
+
+            if (slipVal > 0) {
+                badge.classList.remove('hidden');
+                if (Math.abs(slipVal - grandTotal) < 0.01) {
+                    badge.className = 'text-xs font-semibold text-emerald-600 bg-emerald-50 p-1.5 rounded-lg border border-emerald-200';
+                    badge.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> ยอดเงินตรงกันถูกต้อง';
+                } else {
+                    badge.className = 'text-xs font-semibold text-rose-600 bg-rose-50 p-1.5 rounded-lg border border-rose-200';
+                    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> ยอดเงินไม่ตรง (ต่างกัน ฿${Math.abs(slipVal - grandTotal).toLocaleString()})`;
+                }
+            } else {
+                badge.classList.add('hidden');
+            }
         }
 
         function submitPayment() {
             if (!selectedStudent) {
-                alert('กรุณาเลือกนักเรียนก่อนบันทึกชำระเงิน');
-                return;
-            }
-            const checkboxes = document.querySelectorAll('.fee-checkbox:checked');
-            if (checkboxes.length === 0) {
-                alert('กรุณาเลือกรายการชำระเงินอย่างน้อย 1 รายการ');
+                alert('กรุณาเลือกนักเรียนที่ต้องการชำระเงิน');
                 return;
             }
 
-            let items = [];
+            const selectedCheckboxes = document.querySelectorAll('.fee-checkbox:checked');
+            if (selectedCheckboxes.length === 0) {
+                alert('กรุณาเลือกอย่างน้อย 1 รายการชำระเงิน');
+                return;
+            }
+
+            const items = [];
             let subtotal = 0;
-            checkboxes.forEach(cb => {
-                const amt = parseFloat(cb.getAttribute('data-amount'));
-                items.push({ name: cb.getAttribute('data-name'), amount: amt });
-                subtotal += amt;
+
+            selectedCheckboxes.forEach(cb => {
+                const name = cb.getAttribute('data-name');
+                const itemId = cb.value;
+                const priceInput = document.getElementById(`price-input-${itemId}`);
+                const price = priceInput ? parseFloat(priceInput.value) || 0 : 0;
+                items.push({ name, price });
+                subtotal += price;
             });
 
-            const discount = parseFloat(document.getElementById('payment-discount').value) || 0;
+            const discount = parseFloat(document.getElementById('discount-input').value) || 0;
             const grandTotal = Math.max(0, subtotal - discount);
-            const receiptNo = document.getElementById('preview-receipt-no').innerText.replace('เลขที่: ', '');
-            const paymentMethod = document.getElementById('payment-method').value;
+            const paymentMethod = document.querySelector('input[name="pay-method"]:checked').value;
+            const academicYear = document.getElementById('pay-academic-year').value;
 
-            const transaction = {
-                id: 'TX-' + Date.now(),
-                receiptNo,
+            let slipData = null;
+            if (paymentMethod !== 'เงินสด') {
+                const slipVal = parseFloat(document.getElementById('slip-amount-input').value) || 0;
+                slipData = {
+                    slipAmount: slipVal,
+                    isMatched: Math.abs(slipVal - grandTotal) < 0.01 && slipVal > 0,
+                    imgData: currentSlipBase64
+                };
+            }
+
+            const newRec = {
+                id: 'REC' + academicYear + Date.now().toString().slice(-4),
+                academicYear: academicYear,
+                date: new Date().toISOString(),
                 studentId: selectedStudent.id,
-                studentCode: selectedStudent.code,
                 studentName: selectedStudent.name,
-                className: selectedStudent.className,
-                items,
-                discount,
-                grandTotal,
-                paymentMethod,
-                slip: currentSlipBase64,
-                date: new Date().toISOString()
+                studentLevel: selectedStudent.level,
+                studentClass: selectedStudent.class,
+                items: items,
+                subtotal: subtotal,
+                discount: discount,
+                grandTotal: grandTotal,
+                paymentMethod: paymentMethod,
+                slipData: slipData
             };
 
-            transactions.unshift(transaction);
+            transactions.unshift(newRec);
             localStorage.setItem('k6_transactions_v2', JSON.stringify(transactions));
 
-            // Update student status
-            const studentIndex = students.findIndex(s => s.id === selectedStudent.id);
-            if (studentIndex !== -1) {
-                students[studentIndex].status = 'ชำระแล้ว';
-                localStorage.setItem('k6_students_v2', JSON.stringify(students));
-            }
+            alert(`บันทึกรายการรับชำระเงินเรียบร้อยแล้ว!\nเลขที่รายการ: ${newRec.id}\nปีการศึกษา: ${newRec.academicYear}`);
 
-            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-            alert('บันทึกการรับชำระเงินเรียบร้อยแล้ว!');
+            // Reset Form State
+            currentSlipBase64 = '';
+            document.getElementById('slip-file-input').value = '';
+            document.getElementById('slip-amount-input').value = '';
+            document.getElementById('slip-preview-img').classList.add('hidden');
+            document.getElementById('slip-match-status').classList.add('hidden');
 
-            // Reset form
-            clearSelectedStudent();
-            document.getElementById('payment-discount').value = 0;
-            removeSlip();
-            renderStudentTable();
             renderHistoryTable();
             updateDashboardStats();
-            switchTab('tab-history');
+            renderComparisonTable();
         }
 
-        function printLastReceipt() {
-            window.print();
+        function updateDashboardStats() {
+            const year = document.getElementById('pay-academic-year').value;
+            document.getElementById('stat-year-label').innerText = year;
+
+            const yearItems = transactions.filter(t => t.academicYear === year);
+
+            const total = yearItems.reduce((sum, t) => sum + t.grandTotal, 0);
+            const kinder = yearItems.filter(t => t.studentLevel === 'อนุบาล').reduce((sum, t) => sum + t.grandTotal, 0);
+            const primary = yearItems.filter(t => t.studentLevel === 'ประถมศึกษา').reduce((sum, t) => sum + t.grandTotal, 0);
+
+            document.getElementById('stat-total-year').innerText = `฿${total.toLocaleString()}`;
+            document.getElementById('stat-kinder-year').innerText = `฿${kinder.toLocaleString()}`;
+            document.getElementById('stat-primary-year').innerText = `฿${primary.toLocaleString()}`;
+            document.getElementById('stat-count-year').innerText = `${yearItems.length} รายการ`;
         }
 
-        // Student Management
-        function populateStudentDropdown() {
-            // Dropdown helper if needed
-        }
-
+        // STUDENT TABLE
         function renderStudentTable() {
-            const query = document.getElementById('student-search').value.toLowerCase();
-            const filterClass = document.getElementById('student-filter-class').value;
             const tbody = document.getElementById('student-table-body');
-            tbody.innerHTML = '';
+            const search = document.getElementById('std-filter-search').value.toLowerCase();
+            const level = document.getElementById('std-filter-level').value;
+            const cls = document.getElementById('std-filter-class').value;
 
             const filtered = students.filter(s => {
-                const matchQuery = s.name.toLowerCase().includes(query) || s.code.toLowerCase().includes(query);
-                const matchClass = filterClass ? s.className === filterClass : true;
-                return matchQuery && matchClass;
+                const matchSearch = s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search);
+                const matchLevel = !level || s.level === level;
+                const matchClass = !cls || s.class === cls;
+                return matchSearch && matchLevel && matchClass;
             });
 
-            document.getElementById('student-count-badge').innerText = filtered.length;
+            tbody.innerHTML = filtered.map(s => `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3 font-mono font-semibold text-sky-700">${s.id}</td>
+                    <td class="p-3 font-medium text-slate-800">${s.name}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${s.level === 'อนุบาล' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+                            ${s.level} (${s.class})
+                        </span>
+                    </td>
+                    <td class="p-3 text-slate-600">${s.parent || '-'}</td>
+                    <td class="p-3 text-slate-600">${s.phone || '-'}</td>
+                    <td class="p-3 text-center space-x-2">
+                        <button onclick="openStudentModal('${s.id}')" class="text-sky-600 hover:text-sky-800"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="deleteStudent('${s.id}')" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
 
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-400 py-6">ไม่พบข้อมูลนักเรียน</td></tr>';
-                return;
-            }
+        function updateClassOptions() {
+            const level = document.getElementById('m-std-level').value;
+            const select = document.getElementById('m-std-class');
+            select.innerHTML = '';
 
-            filtered.forEach(s => {
-                const statusBadge = s.status === 'ชำระแล้ว' 
-                    ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">ชำระแล้ว</span>'
-                    : '<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold">ยังไม่ชำระ</span>';
+            const options = level === 'อนุบาล' 
+                ? ['อ.1', 'อ.2', 'อ.3'] 
+                : ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6'];
 
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="p-3 font-mono font-semibold text-slate-700">${s.code}</td>
-                        <td class="p-3 font-bold text-slate-800">${s.name}</td>
-                        <td class="p-3">${s.className}</td>
-                        <td class="p-3">${s.parentName || '-'} (${s.parentPhone || '-'})</td>
-                        <td class="p-3 text-center">${statusBadge}</td>
-                        <td class="p-3 text-center space-x-2">
-                            <button onclick="editStudent('${s.id}')" class="text-indigo-600 hover:text-indigo-800"><i class="fa-solid fa-pen-to-square"></i></button>
-                            <button onclick="deleteStudent('${s.id}')" class="text-rose-600 hover:text-rose-800"><i class="fa-solid fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `;
+            options.forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt;
+                el.innerText = opt;
+                select.appendChild(el);
             });
         }
 
         function openStudentModal(id = null) {
-            document.getElementById('student-modal').classList.remove('hidden');
-            document.getElementById('student-modal').classList.add('flex');
+            document.getElementById('student-form').reset();
+            document.getElementById('edit-std-original-id').value = '';
+            
             if (id) {
-                document.getElementById('student-modal-title').innerText = 'แก้ไขข้อมูลนักเรียน';
-                const s = students.find(item => item.id === id);
-                if (s) {
-                    document.getElementById('edit-student-id').value = s.id;
-                    document.getElementById('form-student-code').value = s.code;
-                    document.getElementById('form-student-name').value = s.name;
-                    document.getElementById('form-student-class').value = s.className;
-                    document.getElementById('form-parent-name').value = s.parentName || '';
-                    document.getElementById('form-parent-phone').value = s.parentPhone || '';
+                const std = students.find(s => s.id === id);
+                if (std) {
+                    document.getElementById('modal-std-title').innerText = 'แก้ไขข้อมูลนักเรียน';
+                    document.getElementById('edit-std-original-id').value = std.id;
+                    document.getElementById('m-std-id').value = std.id;
+                    document.getElementById('m-std-name').value = std.name;
+                    document.getElementById('m-std-level').value = std.level;
+                    updateClassOptions();
+                    document.getElementById('m-std-class').value = std.class;
+                    document.getElementById('m-std-parent').value = std.parent || '';
+                    document.getElementById('m-std-phone').value = std.phone || '';
                 }
             } else {
-                document.getElementById('student-modal-title').innerText = 'เพิ่มนักเรียนใหม่';
-                document.getElementById('student-form').reset();
-                document.getElementById('edit-student-id').value = '';
-                document.getElementById('form-student-code').value = 'ST' + Math.floor(Math.random()*90000+10000);
+                document.getElementById('modal-std-title').innerText = 'เพิ่มข้อมูลนักเรียนใหม่';
+                updateClassOptions();
             }
+
+            document.getElementById('student-modal').classList.remove('hidden');
+            document.getElementById('student-modal').classList.add('flex');
         }
 
         function closeStudentModal() {
@@ -897,268 +1015,333 @@
             document.getElementById('student-modal').classList.remove('flex');
         }
 
-        function saveStudentForm(e) {
+        function saveStudent(e) {
             e.preventDefault();
-            const editId = document.getElementById('edit-student-id').value;
-            const code = document.getElementById('form-student-code').value;
-            const name = document.getElementById('form-student-name').value;
-            const className = document.getElementById('form-student-class').value;
-            const parentName = document.getElementById('form-parent-name').value;
-            const parentPhone = document.getElementById('form-parent-phone').value;
+            const origId = document.getElementById('edit-std-original-id').value;
+            const id = document.getElementById('m-std-id').value.trim();
+            const name = document.getElementById('m-std-name').value.trim();
+            const level = document.getElementById('m-std-level').value;
+            const cls = document.getElementById('m-std-class').value;
+            const parent = document.getElementById('m-std-parent').value.trim();
+            const phone = document.getElementById('m-std-phone').value.trim();
 
-            if (editId) {
-                const idx = students.findIndex(s => s.id === editId);
-                if (idx !== -1) {
-                    students[idx] = { ...students[idx], code, name, className, parentName, parentPhone };
-                }
+            if (origId) {
+                const idx = students.findIndex(s => s.id === origId);
+                if (idx !== -1) students[idx] = { id, name, level, class: cls, parent, phone };
             } else {
-                const newStudent = {
-                    id: 'S' + Date.now(),
-                    code,
-                    name,
-                    className,
-                    parentName,
-                    parentPhone,
-                    status: 'ยังไม่ชำระ'
-                };
-                students.push(newStudent);
+                if (students.some(s => s.id === id)) {
+                    alert('รหัสนักเรียนนี้มีในระบบแล้ว!');
+                    return;
+                }
+                students.push({ id, name, level, class: cls, parent, phone });
             }
 
             localStorage.setItem('k6_students_v2', JSON.stringify(students));
-            closeStudentModal();
+            populateStudentDropdown();
             renderStudentTable();
-            updateDashboardStats();
-            alert('บันทึกข้อมูลนักเรียนสำเร็จ!');
-        }
-
-        function editStudent(id) {
-            openStudentModal(id);
+            closeStudentModal();
         }
 
         function deleteStudent(id) {
-            if (confirm('คุณต้องการลบข้อมูลนักเรียนนี้ใช่หรือไม่?')) {
+            if (confirm('คุณต้องการลบข้อมูลนักเรียนรายนี้ใช่หรือไม่?')) {
                 students = students.filter(s => s.id !== id);
                 localStorage.setItem('k6_students_v2', JSON.stringify(students));
+                populateStudentDropdown();
                 renderStudentTable();
-                updateDashboardStats();
             }
         }
 
-        // History Table
+        // HISTORY & SLIP MATCH TABLE
         function renderHistoryTable() {
             const tbody = document.getElementById('history-table-body');
-            tbody.innerHTML = '';
+            const year = document.getElementById('hist-filter-year').value;
+            const search = document.getElementById('hist-filter-search').value.toLowerCase();
+            const date = document.getElementById('hist-filter-date').value;
+            const method = document.getElementById('hist-filter-method').value;
 
-            if (transactions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">ยังไม่มีประวัติการรับชำระเงิน</td></tr>';
-                return;
-            }
+            const filtered = transactions.filter(t => {
+                const matchYear = !year || t.academicYear === year;
+                const matchSearch = t.id.toLowerCase().includes(search) || t.studentName.toLowerCase().includes(search) || t.studentId.toLowerCase().includes(search);
+                const matchDate = !date || t.date.startsWith(date);
+                const matchMethod = !method || t.paymentMethod === method;
+                return matchYear && matchSearch && matchDate && matchMethod;
+            });
 
-            transactions.forEach(t => {
-                const dateStr = new Date(t.date).toLocaleString('th-TH');
-                tbody.innerHTML += `
+            tbody.innerHTML = filtered.map(t => {
+                let slipBadge = '<span class="text-slate-400 text-[10px]">ไม่ต้องแนบ (เงินสด)</span>';
+                if (t.paymentMethod !== 'เงินสด') {
+                    if (!t.slipData || t.slipData.slipAmount === 0) {
+                        slipBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 text-amber-800 font-semibold"><i class="fa-solid fa-clock mr-1"></i>รอตรวจสอบ</span>';
+                    } else if (t.slipData.isMatched) {
+                        slipBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-semibold"><i class="fa-solid fa-check-circle mr-1"></i>ตรงกัน</span>';
+                    } else {
+                        slipBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-800 font-semibold" title="สลิป: ฿${t.slipData.slipAmount.toLocaleString()}"><i class="fa-solid fa-circle-exclamation mr-1"></i>ยอดไม่ตรง</span>`;
+                    }
+                }
+
+                return `
                     <tr class="hover:bg-slate-50 transition">
-                        <td class="p-3 font-mono font-semibold text-indigo-600">${t.receiptNo}</td>
-                        <td class="p-3">${dateStr}</td>
-                        <td class="p-3 font-bold text-slate-800">${t.studentName}</td>
-                        <td class="p-3">${t.className}</td>
-                        <td class="p-3 text-right font-bold text-emerald-600">${t.grandTotal.toLocaleString('th-TH', {minimumFractionDigits: 2})} ฿</td>
-                        <td class="p-3 text-center">${t.paymentMethod}</td>
+                        <td class="p-3 font-mono font-semibold text-sky-700">${t.id}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded bg-sky-100 text-sky-800 font-bold text-[10px]">${t.academicYear}</span></td>
+                        <td class="p-3 text-slate-500">${new Date(t.date).toLocaleDateString('th-TH')} ${new Date(t.date).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
+                        <td class="p-3">
+                            <div class="font-medium text-slate-800">${t.studentName}</div>
+                            <div class="text-[10px] text-slate-400">รหัส: ${t.studentId} | ชั้น: ${t.studentClass}</div>
+                        </td>
+                        <td class="p-3 text-right font-bold text-emerald-600">฿${t.grandTotal.toLocaleString()}</td>
                         <td class="p-3 text-center">
-                            <button onclick="viewTransaction('${t.id}')" class="text-indigo-600 hover:text-indigo-800"><i class="fa-solid fa-eye"></i></button>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 font-medium text-slate-700 border">
+                                ${t.paymentMethod}
+                            </span>
+                        </td>
+                        <td class="p-3 text-center">${slipBadge}</td>
+                        <td class="p-3 text-center space-x-2">
+                            ${t.paymentMethod !== 'เงินสด' ? `<button onclick="viewSlip('${t.id}')" class="text-indigo-600 hover:text-indigo-800" title="ดูหลักฐานสลิป"><i class="fa-solid fa-file-image text-base"></i></button>` : ''}
+                            <button onclick="deleteTransaction('${t.id}')" class="text-rose-500 hover:text-rose-700" title="ลบรายการ"><i class="fa-solid fa-trash"></i></button>
                         </td>
                     </tr>
                 `;
-            });
+            }).join('');
         }
 
-        function viewTransaction(id) {
-            const t = transactions.find(item => item.id === id);
-            if (t) {
-                alert(`ใบเสร็จ: ${t.receiptNo}\nนักเรียน: ${t.studentName} (${t.className})\nยอดสุทธิ: ${t.grandTotal.toLocaleString()} บาท\nวิธีชำระ: ${t.paymentMethod}`);
-            }
-        }
+        function viewSlip(id) {
+            const t = transactions.find(x => x.id === id);
+            if (!t) return;
 
-        // EXCEL & GEMINI AI IMPORT LOGIC
-        function openExcelImportModal() {
-            document.getElementById('excel-import-modal').classList.remove('hidden');
-            document.getElementById('excel-import-modal').classList.add('flex');
-            document.getElementById('ai-loading-state').classList.add('hidden');
-            document.getElementById('import-preview-section').classList.add('hidden');
-            document.getElementById('btn-confirm-import').classList.add('hidden');
-            document.getElementById('import-file-input').value = '';
-        }
+            document.getElementById('modal-slip-rec-id').innerText = t.id;
+            document.getElementById('modal-slip-system-amount').innerText = `฿${t.grandTotal.toLocaleString()}`;
+            
+            const badge = document.getElementById('modal-slip-match-badge');
+            const userAmtEl = document.getElementById('modal-slip-user-amount');
+            const imgEl = document.getElementById('modal-slip-image');
 
-        function closeExcelImportModal() {
-            document.getElementById('excel-import-modal').classList.add('hidden');
-            document.getElementById('excel-import-modal').classList.remove('flex');
-        }
-
-        function handleFileSelected(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                
-                // อ่านข้อมูลจากทุกหน้าต่าง (Every Sheet) ของไฟล์ Excel
-                let allWorkbookRows = [];
-                workbook.SheetNames.forEach(sheetName => {
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    if (jsonRows && jsonRows.length > 0) {
-                        allWorkbookRows.push({
-                            sheetName: sheetName,
-                            rows: jsonRows
-                        });
-                    }
-                });
-
-                parseWithGeminiAI(allWorkbookRows);
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        async function parseWithGeminiAI(workbookData) {
-            const apiKey = localStorage.getItem('k6_gemini_api_key') || 'AQ.Ab8RN6K2KgGtvnQm-KASDSr86V8xChyJncXrDhXa24FUfTztRQ';
-            document.getElementById('ai-loading-state').classList.remove('hidden');
-
-            const promptText = `
-คุณเป็นผู้ช่วย AI วิเคราะห์ข้อมูลนักเรียนโรงเรียนอนุบาลและประถมจากไฟล์ Excel ที่มีหลายหน้าต่าง (Sheets)
-นี่คือข้อมูลดิบทั้งหมดที่อ่านจากทุกหน้าต่างของไฟล์ Excel:
-${JSON.stringify(workbookData.map(s => ({ sheet: s.sheetName, data: s.rows.slice(0, 100) })))}
-
-หน้าที่ของคุณคือตรวจสอบทุกหน้าต่าง รวบรวมรายชื่อนักเรียนทั้งหมด และแปลงให้เป็น JSON Array ของออบเจ็กต์นักเรียน โดยแต่ละออบเจ็กต์ต้องมีฟิลด์ดังนี้:
-- code: รหัสนักเรียน (ถ้าไม่มีให้สร้างรหัสขึ้นมาใหม่ เช่น ST69901)
-- name: ชื่อและนามสกุลนักเรียน
-- className: ระดับชั้น (เช่น อนุบาล 1, อนุบาล 2, อนุบาล 3, ประถมศึกษาปีที่ 1 ถึง ประถมศึกษาปีที่ 6)
-- parentName: ชื่อผู้ปกครอง (ถ้าไม่มีให้ใส่ "-")
-- parentPhone: เบอร์โทรผู้ปกครอง (ถ้าไม่มีให้ใส่ "-")
-
-ขอผลลัพธ์เป็น JSON Array ล้วนๆ ไม่มีข้อความอื่นกำกับ
-`;
-
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-            const payload = {
-                contents: [{ parts: [{ text: promptText }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            };
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                const candidate = result.candidates?.[0];
-                if (candidate && candidate.content?.parts?.[0]?.text) {
-                    const textResponse = candidate.content.parts[0].text;
-                    parsedImportStudents = JSON.parse(textResponse);
-                    renderImportPreviewTable();
+            if (t.slipData) {
+                userAmtEl.innerText = `฿${t.slipData.slipAmount.toLocaleString()}`;
+                if (t.slipData.isMatched) {
+                    badge.className = 'py-1 px-3 rounded-lg font-bold text-center text-xs bg-emerald-100 text-emerald-800';
+                    badge.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> ยอดเงินตรงกันถูกต้อง';
                 } else {
-                    throw new Error('AI response structure invalid');
+                    badge.className = 'py-1 px-3 rounded-lg font-bold text-center text-xs bg-rose-100 text-rose-800';
+                    badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> ยอดเงินไม่ตรงกับระบบ';
                 }
-            } catch (err) {
-                console.error(err);
-                alert('เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini AI กรุณาลองใหม่อีกครั้ง');
-                document.getElementById('ai-loading-state').classList.add('hidden');
+                imgEl.src = t.slipData.imgData || 'https://placehold.co/400x500/e2e8f0/475569?text=Slip+Image+Preview';
+            } else {
+                userAmtEl.innerText = 'ยังไม่ได้แนบยอด';
+                badge.className = 'py-1 px-3 rounded-lg font-bold text-center text-xs bg-slate-100 text-slate-600';
+                badge.innerText = 'ไม่มีข้อมูลสลิป';
+                imgEl.src = 'https://placehold.co/400x500/e2e8f0/475569?text=No+Slip+Attached';
+            }
+
+            document.getElementById('slip-modal').classList.remove('hidden');
+            document.getElementById('slip-modal').classList.add('flex');
+        }
+
+        function closeSlipModal() {
+            document.getElementById('slip-modal').classList.add('hidden');
+            document.getElementById('slip-modal').classList.remove('flex');
+        }
+
+        function deleteTransaction(id) {
+            if (confirm('คุณต้องการลบรายการชำระเงินนี้ใช่หรือไม่?')) {
+                transactions = transactions.filter(t => t.id !== id);
+                localStorage.setItem('k6_transactions_v2', JSON.stringify(transactions));
+                renderHistoryTable();
+                updateDashboardStats();
+                renderComparisonTable();
             }
         }
 
-        function renderImportPreviewTable() {
-            document.getElementById('ai-loading-state').classList.add('hidden');
-            const tbody = document.getElementById('import-preview-tbody');
-            tbody.innerHTML = '';
+        // REPORTS & 3-YEAR COMPARISON
+        function toggleReportSubView() {
+            const v = document.getElementById('report-view-type').value;
+            document.getElementById('subview-comparison').classList.add('hidden');
+            document.getElementById('subview-daily').classList.add('hidden');
+            document.getElementById('subview-monthly').classList.add('hidden');
 
-            parsedImportStudents.forEach((s, idx) => {
-                tbody.innerHTML += `
+            if (v === 'comparison') {
+                document.getElementById('subview-comparison').classList.remove('hidden');
+                renderComparisonTable();
+            } else if (v === 'daily') {
+                document.getElementById('subview-daily').classList.remove('hidden');
+                renderDailyReport();
+            } else if (v === 'monthly') {
+                document.getElementById('subview-monthly').classList.remove('hidden');
+                renderMonthlyReport();
+            }
+        }
+
+        function renderComparisonTable() {
+            const years = ['2567', '2568', '2569'];
+            
+            // 8 Standard Fee Names
+            const feeNames = [
+                '1. ค่าอาหาร', '2. ค่าแม่บ้าน', '3. ค่าเรียนคอมพิวเตอร์', '4. ค่าเทอม',
+                '5. ค่าสมัครแรกเข้า', '6. ค่าประกันชีวิต', '7. ค่ากิจกรรมชุมนุม', '8. อื่นๆ'
+            ];
+
+            const feeTotals = {};
+            feeNames.forEach(fn => {
+                feeTotals[fn] = { '2567': 0, '2568': 0, '2569': 0 };
+            });
+
+            const yearGrandTotals = { '2567': 0, '2568': 0, '2569': 0 };
+            const levelTotals = {
+                'อนุบาล': { '2567': 0, '2568': 0, '2569': 0 },
+                'ประถมศึกษา': { '2567': 0, '2568': 0, '2569': 0 }
+            };
+
+            transactions.forEach(t => {
+                const y = t.academicYear;
+                if (!years.includes(y)) return;
+
+                yearGrandTotals[y] += t.grandTotal;
+
+                if (levelTotals[t.studentLevel]) {
+                    levelTotals[t.studentLevel][y] += t.grandTotal;
+                }
+
+                t.items.forEach(it => {
+                    let matchedKey = feeNames.find(fn => it.name.startsWith(fn.split('.')[0]));
+                    if (!matchedKey) matchedKey = '8. อื่นๆ';
+                    feeTotals[matchedKey][y] += it.price;
+                });
+            });
+
+            // Render Fee Items Comparison Table
+            const tbody = document.getElementById('comp-fee-table-body');
+            tbody.innerHTML = feeNames.map(fn => {
+                const v67 = feeTotals[fn]['2567'];
+                const v68 = feeTotals[fn]['2568'];
+                const v69 = feeTotals[fn]['2569'];
+
+                const growth68 = v67 > 0 ? (((v68 - v67) / v67) * 100).toFixed(1) : (v68 > 0 ? '+100' : '0');
+                const growth69 = v68 > 0 ? (((v69 - v68) / v68) * 100).toFixed(1) : (v69 > 0 ? '+100' : '0');
+
+                const badge68Class = parseFloat(growth68) >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+                const badge69Class = parseFloat(growth69) >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+
+                return `
                     <tr class="hover:bg-slate-50 transition">
-                        <td class="p-2.5 text-center"><input type="checkbox" class="import-row-checkbox w-4 h-4 text-indigo-600 rounded border-slate-300" data-index="${idx}" checked></td>
-                        <td class="p-2.5 font-mono">${s.code || '-'}</td>
-                        <td class="p-2.5 font-bold">${s.name || '-'}</td>
-                        <td class="p-2.5">${s.className || 'ประถมศึกษาปีที่ 1'}</td>
-                        <td class="p-2.5">${s.parentName || '-'} (${s.parentPhone || '-'})</td>
+                        <td class="p-3 font-semibold text-slate-800">${fn}</td>
+                        <td class="p-3 text-right font-mono text-slate-600">฿${v67.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono text-slate-600">฿${v68.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-bold text-sky-700">฿${v69.toLocaleString()}</td>
+                        <td class="p-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${badge68Class}">${growth68}%</span></td>
+                        <td class="p-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${badge69Class}">${growth69}%</span></td>
                     </tr>
                 `;
+            }).join('');
+
+            // Footers
+            document.getElementById('comp-fee-table-foot').innerHTML = `
+                <tr>
+                    <td class="p-3 text-slate-800">รวมรายรับสุทธิทุกรายการ</td>
+                    <td class="p-3 text-right font-mono">฿${yearGrandTotals['2567'].toLocaleString()}</td>
+                    <td class="p-3 text-right font-mono">฿${yearGrandTotals['2568'].toLocaleString()}</td>
+                    <td class="p-3 text-right font-mono text-sky-800">฿${yearGrandTotals['2569'].toLocaleString()}</td>
+                    <td colspan="2" class="p-3 text-center text-xs text-slate-500">สรุปรวม 3 ปี</td>
+                </tr>
+            `;
+
+            // Render Level Breakdown Table
+            const levelBody = document.getElementById('comp-level-table-body');
+            levelBody.innerHTML = Object.keys(levelTotals).map(lvl => {
+                const v67 = levelTotals[lvl]['2567'];
+                const v68 = levelTotals[lvl]['2568'];
+                const v69 = levelTotals[lvl]['2569'];
+                const pct69 = yearGrandTotals['2569'] > 0 ? ((v69 / yearGrandTotals['2569']) * 100).toFixed(1) : '0';
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-semibold text-slate-800">${lvl}</td>
+                        <td class="p-3 text-right font-mono">฿${v67.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono">฿${v68.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-bold text-emerald-600">฿${v69.toLocaleString()}</td>
+                        <td class="p-3 text-center"><span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[10px]">${pct69}%</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderDailyReport() {
+            const dt = document.getElementById('daily-report-date').value;
+            const dayItems = transactions.filter(t => t.date.startsWith(dt));
+
+            let cashTotal = 0;
+            let transferTotal = 0;
+
+            dayItems.forEach(t => {
+                if (t.paymentMethod === 'เงินสด') cashTotal += t.grandTotal;
+                else transferTotal += t.grandTotal;
             });
 
-            document.getElementById('import-preview-section').classList.remove('hidden');
-            document.getElementById('btn-confirm-import').classList.remove('hidden');
-        }
+            document.getElementById('daily-cash-total').innerText = `฿${cashTotal.toLocaleString()}`;
+            document.getElementById('daily-transfer-total').innerText = `฿${transferTotal.toLocaleString()}`;
+            document.getElementById('daily-grand-total').innerText = `฿${(cashTotal + transferTotal).toLocaleString()}`;
 
-        function toggleSelectAllImport(checked) {
-            document.querySelectorAll('.import-row-checkbox').forEach(cb => cb.checked = checked);
-        }
-
-        function confirmImportStudents() {
-            const checkboxes = document.querySelectorAll('.import-row-checkbox:checked');
-            let addedCount = 0;
-
-            checkboxes.forEach(cb => {
-                const idx = parseInt(cb.getAttribute('data-index'));
-                const raw = parsedImportStudents[idx];
-                const newStudent = {
-                    id: 'S' + Date.now() + Math.floor(Math.random()*1000),
-                    code: raw.code || ('ST' + Math.floor(Math.random()*90000+10000)),
-                    name: raw.name || 'ไม่ระบุชื่อ',
-                    className: raw.className || 'ประถมศึกษาปีที่ 1',
-                    parentName: raw.parentName || '-',
-                    parentPhone: raw.parentPhone || '-',
-                    status: 'ยังไม่ชำระ'
-                };
-                students.push(newStudent);
-                addedCount++;
-            });
-
-            localStorage.setItem('k6_students_v2', JSON.stringify(students));
-            closeExcelImportModal();
-            renderStudentTable();
-            updateDashboardStats();
-            alert(`นำเข้าข้อมูลนักเรียนสำเร็จ ${addedCount} รายการ!`);
-        }
-
-        // Export Center Functions
-        function exportStudentsExcel() {
-            let dataToExport = students.map((s, idx) => ({
-                'ลำดับ': idx + 1,
-                'รหัสนักเรียน': s.code,
-                'ชื่อ - นามสกุล': s.name,
-                'ระดับชั้น': s.className,
-                'ผู้ปกครอง': s.parentName,
-                'เบอร์โทรผู้ปกครอง': s.parentPhone,
-                'สถานะชำระเงิน': s.status
-            }));
-
-            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "รายชื่อนักเรียน");
-            XLSX.writeFile(workbook, "Student_List_Report.xlsx");
-        }
-
-        function exportFinancialExcel() {
-            let dataToExport = transactions.map((t, idx) => ({
-                'ลำดับ': idx + 1,
-                'เลขที่ใบเสร็จ': t.receiptNo,
-                'วันที่-เวลา': new Date(t.date).toLocaleString('th-TH'),
-                'รหัสนักเรียน': t.studentCode,
-                'ชื่อ-นามสกุล': t.studentName,
-                'ระดับชั้น': t.className,
-                'ยอดชำระสุทธิ (บาท)': t.grandTotal,
-                'วิธีชำระเงิน': t.paymentMethod
-            }));
-
-            if (dataToExport.length === 0) {
-                alert('ยังไม่มีข้อมูลธุรกรรมสำหรับการส่งออก');
+            const tbody = document.getElementById('daily-report-tbody');
+            if (dayItems.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">ไม่มีรายการรับชำระเงินในวันที่เลือก</td></tr>';
                 return;
             }
 
-            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "รายงานรับเงิน");
-            XLSX.writeFile(workbook, "Financial_Transactions_Report.xlsx");
+            tbody.innerHTML = dayItems.map(t => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-2.5 text-slate-500">${new Date(t.date).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
+                    <td class="p-2.5 font-mono font-bold text-sky-700">${t.id}</td>
+                    <td class="p-2.5">${t.studentName} (${t.studentClass})</td>
+                    <td class="p-2.5 text-slate-600">${t.items.map(i => i.name).join(', ')}</td>
+                    <td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-100">${t.paymentMethod}</span></td>
+                    <td class="p-2.5 text-right font-bold text-emerald-600">฿${t.grandTotal.toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderMonthlyReport() {
+            const year = document.getElementById('monthly-report-year').value;
+            const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+            
+            const monthlyData = Array.from({ length: 12 }, () => ({ count: 0, cash: 0, transfer: 0, total: 0 }));
+
+            transactions.filter(t => t.academicYear === year).forEach(t => {
+                const d = new Date(t.date);
+                const m = d.getMonth();
+                monthlyData[m].count++;
+                if (t.paymentMethod === 'เงินสด') monthlyData[m].cash += t.grandTotal;
+                else monthlyData[m].transfer += t.grandTotal;
+                monthlyData[m].total += t.grandTotal;
+            });
+
+            const tbody = document.getElementById('monthly-report-tbody');
+            let yearCash = 0, yearTransfer = 0, yearTotal = 0, yearCount = 0;
+
+            tbody.innerHTML = monthNames.map((mName, idx) => {
+                const data = monthlyData[idx];
+                yearCash += data.cash;
+                yearTransfer += data.transfer;
+                yearTotal += data.total;
+                yearCount += data.count;
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-semibold text-slate-800">${mName}</td>
+                        <td class="p-3 text-center text-slate-600">${data.count}</td>
+                        <td class="p-3 text-right font-mono text-slate-600">฿${data.cash.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono text-slate-600">฿${data.transfer.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-bold text-indigo-700">฿${data.total.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('monthly-report-tfoot').innerHTML = `
+                <tr>
+                    <td class="p-3 text-slate-800">รวมทั้งสิ้นปีการศึกษา ${year}</td>
+                    <td class="p-3 text-center">${yearCount}</td>
+                    <td class="p-3 text-right font-mono">฿${yearCash.toLocaleString()}</td>
+                    <td class="p-3 text-right font-mono">฿${yearTransfer.toLocaleString()}</td>
+                    <td class="p-3 text-right font-mono text-indigo-900 text-sm">฿${yearTotal.toLocaleString()}</td>
+                </tr>
+            `;
         }
     </script>
 </body>
